@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import chromadb
 from chromadb.config import Settings
+from src.config import config
 from src.rag.embeddings import OllamaEmbeddingProvider
 from src.security.logger import get_secure_logger
 

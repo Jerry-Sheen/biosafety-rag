@@ -24,13 +24,16 @@ from src.security.logger import get_secure_logger
 
 logger = get_secure_logger("user_app")
 
-# Streamlit Page Settings
-st.set_page_config(
-    page_title="RAG Vibe - 사용자 지식 대화 시스템 (User Chat)",
-    page_icon="💬",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Streamlit Page Settings (Safe for both standalone and imported execution)
+try:
+    st.set_page_config(
+        page_title="RAG Vibe - 사용자 지식 대화 시스템 (User Chat)",
+        page_icon="💬",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+except Exception:
+    pass
 
 # Custom Styling
 st.markdown(

@@ -35,7 +35,20 @@ class OllamaEmbeddingProvider:
             )
             self._is_mock = True
         else:
-            logger.info(f"Connected to Ollama at {self.base_url}. Using embedding model: {self.model_name}")
+            installed = status.get("models", [])
+            model_installed = any(
+                m == self.model_name or m.startswith(f"{self.model_name}:")
+                for m in installed
+            )
+            if not model_installed:
+                logger.warning(
+                    f"Ollama connected, but embedding model '{self.model_name}' is not installed yet. "
+                    f"Run 'ollama pull {self.model_name}' in your terminal. "
+                    "Running in MOCK embedding mode in the meantime."
+                )
+                self._is_mock = True
+            else:
+                logger.info(f"Connected to Ollama at {self.base_url}. Using embedding model: {self.model_name}")
 
     @property
     def is_mock(self) -> bool:

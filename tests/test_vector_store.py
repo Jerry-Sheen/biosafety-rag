@@ -8,7 +8,7 @@ from src.rag.embeddings import OllamaEmbeddingProvider
 
 
 def test_vector_store_incremental_add_and_search():
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
         # Use mock embedding provider for tests
         embedder = OllamaEmbeddingProvider(base_url="http://localhost:11434")
         vs = PersistentVectorStore(

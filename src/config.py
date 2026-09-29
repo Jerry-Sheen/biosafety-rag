@@ -3,7 +3,7 @@ Application configuration management.
 Centralizes paths, Ollama settings, models, and system parameters.
 """
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from src.security.secrets_manager import secrets_manager
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -44,8 +44,7 @@ class AppConfig(BaseModel):
         default_factory=lambda: secrets_manager.get_secret("ADMIN_ACCESS_PIN", "admin1234")
     )
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def init_directories(self):
         """Ensures storage directories exist."""

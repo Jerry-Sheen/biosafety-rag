@@ -64,7 +64,7 @@ class TestRagVibeCore(unittest.TestCase):
             from src.rag.vector_store import PersistentVectorStore
             from src.rag.embeddings import OllamaEmbeddingProvider
 
-            with tempfile.TemporaryDirectory() as tmp_dir:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
                 embedder = OllamaEmbeddingProvider(base_url="http://localhost:11434")
                 vs = PersistentVectorStore(
                     persist_directory=Path(tmp_dir),
