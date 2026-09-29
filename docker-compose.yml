@@ -1,34 +1,55 @@
 services:
-  rag-app:
+  # 🛠️ 관리자 포털 서비스 (문서 업로드, Docling/OCR, 청킹, 임베딩, DB 관리)
+  admin-service:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: rag-vibe-app
+    container_name: rag-vibe-admin
+    command: ["streamlit", "run", "admin.py", "--server.port=8501", "--server.address=0.0.0.0"]
     restart: unless-stopped
     ports:
       - "8501:8501"
     env_file:
       - .env
-    volumes:
-      # Persistent vector database storage on host / named volume
-      - chroma_data:/app/data/chroma_db
-      - upload_data:/app/data/uploads
     environment:
       - APP_ENV=production
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - CHROMA_PERSIST_DIRECTORY=data/chroma_db
       - UPLOAD_DIRECTORY=data/uploads
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - chroma_data:/app/data/chroma_db
+      - upload_data:/app/data/uploads
     deploy:
       resources:
         limits:
           memory: 4G
-        reservations:
-          memory: 1G
+
+  # 💬 사용자 서비스 (대화형 RAG, 실시간 스트리밍 답변, 출처 인용)
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-vibe-user
+    command: ["streamlit", "run", "user.py", "--server.port=8502", "--server.address=0.0.0.0"]
+    restart: unless-stopped
+    ports:
+      - "8502:8502"
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - CHROMA_PERSIST_DIRECTORY=data/chroma_db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - chroma_data:/app/data/chroma_db:ro  # Read-only for user service safety
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
 volumes:
   chroma_data:

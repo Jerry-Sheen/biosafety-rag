@@ -61,12 +61,11 @@ class TestRagVibeCore(unittest.TestCase):
 
     def test_vector_store_if_chroma_installed(self):
         try:
-            import chromadb
             from src.rag.vector_store import PersistentVectorStore
-            from src.rag.embeddings import GeminiEmbeddingProvider
+            from src.rag.embeddings import OllamaEmbeddingProvider
 
             with tempfile.TemporaryDirectory() as tmp_dir:
-                embedder = GeminiEmbeddingProvider(api_key="mock_test_key")
+                embedder = OllamaEmbeddingProvider(base_url="http://localhost:11434")
                 vs = PersistentVectorStore(
                     persist_directory=Path(tmp_dir),
                     collection_name="test_col",

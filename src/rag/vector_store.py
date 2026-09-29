@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import chromadb
 from chromadb.config import Settings
-from src.config import config
-from src.rag.embeddings import GeminiEmbeddingProvider
+from src.rag.embeddings import OllamaEmbeddingProvider
 from src.security.logger import get_secure_logger
 
 logger = get_secure_logger("vector_store")
@@ -22,11 +21,11 @@ class PersistentVectorStore:
         self,
         persist_directory: Optional[Path] = None,
         collection_name: Optional[str] = None,
-        embedding_provider: Optional[GeminiEmbeddingProvider] = None
+        embedding_provider: Optional[OllamaEmbeddingProvider] = None
     ):
         self.persist_directory = str(persist_directory or config.chroma_persist_dir)
         self.collection_name = collection_name or config.chroma_collection_name
-        self.embedding_provider = embedding_provider or GeminiEmbeddingProvider()
+        self.embedding_provider = embedding_provider or OllamaEmbeddingProvider()
 
         logger.info(f"Connecting to ChromaDB at: {self.persist_directory}")
         self.client = chromadb.PersistentClient(
