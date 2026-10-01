@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 import chromadb
 from chromadb.config import Settings
 from src.config import config
-from src.rag.embeddings import OllamaEmbeddingProvider
+from src.rag.embeddings import get_embedding_provider
 from src.security.logger import get_secure_logger
 
 logger = get_secure_logger("vector_store")
@@ -22,11 +22,11 @@ class PersistentVectorStore:
         self,
         persist_directory: Optional[Path] = None,
         collection_name: Optional[str] = None,
-        embedding_provider: Optional[OllamaEmbeddingProvider] = None
+        embedding_provider: Optional[Any] = None
     ):
         self.persist_directory = str(persist_directory or config.chroma_persist_dir)
         self.collection_name = collection_name or config.chroma_collection_name
-        self.embedding_provider = embedding_provider or OllamaEmbeddingProvider()
+        self.embedding_provider = embedding_provider or get_embedding_provider()
 
         logger.info(f"Connecting to ChromaDB at: {self.persist_directory}")
         self.client = chromadb.PersistentClient(
@@ -46,7 +46,8 @@ class PersistentVectorStore:
         if not chunks:
             return 0
 
-        texts = [c["text"] for c in chunks]
+        # Sanitize texts to ensure valid UTF-8 without stray surrogates
+        texts = [c["text"].encode("utf-8", "ignore").decode("utf-8") for c in chunks]
         metadatas = [c["metadata"] for c in chunks]
 
         # Generate unique deterministic/UUID IDs

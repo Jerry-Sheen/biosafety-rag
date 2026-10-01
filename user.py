@@ -65,9 +65,9 @@ def initialize_user_rag():
 
 
 def main():
-    st.markdown('<div class="user-header">💬 RAG Vibe - 사용자 지식 대화 AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-header">💬 RAG Vibe - 지식 기반 대화형 AI</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="user-desc">업로드된 사내/개인 문서를 바탕으로 로컬 Ollama AI가 정확한 답변을 실시간 스트리밍으로 제공합니다.</div>',
+        '<div class="user-desc">업로드된 사내/개인 문서를 바탕으로 AI가 정확한 답변을 실시간 스트리밍으로 제공합니다. (Google Gemini 및 로컬 Ollama 지원)</div>',
         unsafe_allow_html=True
     )
 
@@ -76,34 +76,73 @@ def main():
 
     # 1. Sidebar Configuration & Status
     with st.sidebar:
+        st.subheader("🤖 AI 모델 및 엔진 설정")
+        
+        provider_option = st.radio(
+            "사용할 LLM 제공자 선택:",
+            options=["✨ Google Gemini (추천: 설치 불필요/초고속)", "🦙 로컬 Ollama (오프라인 로컬 실행)"],
+            index=0 if config.llm_provider == "gemini" else 1,
+            help="Google Gemini를 선택하면 별도의 로컬 Ollama 설치 없이 다수의 사용자가 즉시 쾌적하게 이용할 수 있습니다."
+        )
+
+        use_gemini = "Gemini" in provider_option
+        rag_engine.llm_provider = "gemini" if use_gemini else "ollama"
+
+        if use_gemini:
+            st.caption("🚀 **클라우드 API 모드**: 별도의 로컬 서버 설치 없이 안정적인 스트리밍을 제공합니다.")
+            
+            # API Key Configuration
+            current_key = st.session_state.get("user_gemini_api_key", config.gemini_api_key)
+            api_key_input = st.text_input(
+                "🔑 Gemini API 키:",
+                value=current_key if current_key else "",
+                type="password",
+                help=".env에 GEMINI_API_KEY를 설정하거나 여기에 직접 입력하세요. (aistudio.google.com 무료 발급)"
+            )
+            if api_key_input:
+                st.session_state.user_gemini_api_key = api_key_input
+                rag_engine.gemini_api_key = api_key_input
+                st.success("API 키가 적용되었습니다.", icon="✅")
+            else:
+                rag_engine.gemini_api_key = ""
+                st.warning("Gemini API 키가 필요합니다. [무료 발급받기](https://aistudio.google.com/app/apikey)")
+
+            gemini_model_options = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3-flash"]
+            default_idx = gemini_model_options.index(config.gemini_model) if config.gemini_model in gemini_model_options else 0
+            selected_gemini_model = st.selectbox(
+                "Gemini 모델 선택:",
+                options=gemini_model_options,
+                index=default_idx
+            )
+            rag_engine.gemini_model = selected_gemini_model
+
+        else:
+            st.caption("💻 **로컬 Ollama 모드**: 로컬 하드웨어에서 100% 오프라인으로 실행됩니다.")
+            ollama_status = ollama_client.check_connection()
+            if ollama_status["connected"]:
+                st.success(f"Ollama 연결됨 (`{config.ollama_base_url}`)")
+                installed_models = ollama_status["models"]
+
+                if installed_models:
+                    selected_model = st.selectbox(
+                        "사용할 Ollama 모델 선택:",
+                        options=installed_models,
+                        index=installed_models.index(config.ollama_llm_model) if config.ollama_llm_model in installed_models else 0
+                    )
+                    rag_engine.ollama_model = selected_model
+                else:
+                    st.info(f"설치된 모델 없음. 기본 모델: `{config.ollama_llm_model}`")
+            else:
+                st.error(f"Ollama 미연결 (`{config.ollama_base_url}`)")
+                st.caption("터미널에서 `ollama serve`를 실행하거나, 상단에서 **Google Gemini** 모드를 선택해주세요.")
+
+        st.divider()
         st.subheader("⚙️ 검색 파라미터")
         top_k = st.slider("참고할 청크 수 (Top-K)", min_value=1, max_value=10, value=4, step=1)
         score_threshold = st.slider(
             "최소 유사도 기준 (Threshold)", min_value=0.0, max_value=0.9, value=0.1, step=0.05,
             help="유사도가 이 값 이상인 문서 청크만 답변 컨텍스트로 활용합니다."
         )
-
-        st.divider()
-        st.subheader("🦙 로컬 Ollama 모델")
-        ollama_status = ollama_client.check_connection()
-        if ollama_status["connected"]:
-            st.success(f"Ollama 연결됨 (`{config.ollama_base_url}`)")
-            installed_models = ollama_status["models"]
-
-            # Model selector if multiple models are installed in Ollama
-            if installed_models:
-                selected_model = st.selectbox(
-                    "사용할 LLM 모델 선택:",
-                    options=installed_models,
-                    index=installed_models.index(config.ollama_llm_model) if config.ollama_llm_model in installed_models else 0
-                )
-                rag_engine.llm_model = selected_model
-            else:
-                st.info(f"설치된 모델 없음. 기본 모델: `{config.ollama_llm_model}`")
-        else:
-            st.warning(f"Ollama 서비스 미연결 (`{config.ollama_base_url}`)")
-            st.caption("터미널에서 `ollama serve`를 실행해주세요.")
-            st.code(f"ollama pull {config.ollama_llm_model}\nollama pull {config.ollama_embed_model}", language="bash")
 
         st.divider()
         if st.button("🗑️ 대화 기록 초기화", use_container_width=True):
@@ -125,7 +164,7 @@ def main():
         st.session_state.user_messages = [
             {
                 "role": "assistant",
-                "content": "안녕하세요! 업로드된 문서를 바탕으로 질문에 답변해 드립니다. 궁금한 점을 질문해 보세요.",
+                "content": "안녕하세요! 등록된 문서를 기반으로 질문에 명확하고 상세하게 답변해 드립니다. 무엇이든 질문해 보세요.",
                 "sources": []
             }
         ]
@@ -144,14 +183,16 @@ def main():
                         st.text(src["text"])
 
     # 4. Handle user input
-    if prompt := st.chat_input("문서에 대해 질문하세요... (예: 계약서의 주요 조항을 요약해줘)"):
+    if prompt := st.chat_input("문서에 대해 질문하세요... (예: 생물작용제 및 독소 신고 제도의 제출처를 알려줘)"):
         # Append user message
         st.session_state.user_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate assistant response
+        # Generate assistant response with visual indicators
         with st.chat_message("assistant"):
+            # Step-by-step progress visual indicator
+            status_box = st.status("💡 답변 생성 프로세스를 시작합니다...", expanded=True)
             response_placeholder = st.empty()
             sources_container = st.container()
 
@@ -164,7 +205,7 @@ def main():
             full_response = ""
             retrieved_sources: List[Dict[str, Any]] = []
 
-            # Stream response from Ollama RAG engine
+            # Stream response from RAG engine
             stream_gen = rag_engine.generate_streaming_response(
                 query=prompt,
                 chat_history=history_for_engine,
@@ -174,16 +215,32 @@ def main():
 
             for event in stream_gen:
                 event_type = event.get("type")
-                if event_type == "sources":
+                if event_type == "status":
+                    stage = event.get("stage")
+                    msg = event.get("message")
+                    if stage == "searching":
+                        status_box.update(label=f"🔍 {msg}", state="running")
+                    elif stage == "generating":
+                        status_box.update(label=f"🧠 {msg}", state="running")
+                    elif stage == "streaming":
+                        status_box.update(label="✍️ 실시간 답변 스트리밍 중...", state="running")
+                    elif stage == "done":
+                        status_box.update(label="✅ 답변 생성 완료", state="complete", expanded=False)
+                elif event_type == "sources":
                     retrieved_sources = event.get("content", [])
+                    if retrieved_sources:
+                        status_box.write(f"📖 **{len(retrieved_sources)}개**의 관련 문서 청크를 찾았습니다.")
+                    else:
+                        status_box.write("⚠️ 관련 문서를 찾지 못했습니다.")
                 elif event_type == "token":
                     full_response += event.get("content", "")
-                    response_placeholder.markdown(full_response + "▌")
+                    response_placeholder.markdown(full_response + " ▌")
                 elif event_type == "error":
                     full_response += f"\n\n⚠️ {event.get('content')}"
                     response_placeholder.markdown(full_response)
+                    status_box.update(label="⚠️ 오류가 발생했습니다.", state="error", expanded=True)
 
-            # Final clean render
+            # Final clean render without cursor
             response_placeholder.markdown(full_response)
 
             # Display citations expander if sources were retrieved

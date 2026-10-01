@@ -66,14 +66,15 @@ def render_user_view(rag_engine: ConversationalRAGEngine, vector_store: Persiste
                         st.text(src["text"])
 
     # 4. Handle incoming user query
-    if user_query := st.chat_input("문서에 대해 질문하세요... (예: 계약서의 주요 조건은 무엇인가요?)"):
+    if user_query := st.chat_input("문서에 대해 질문하세요... (예: 생물작용제 및 독소 신고 제도의 제출처를 알려줘)"):
         # Display user message
         st.session_state.messages.append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
 
-        # Prepare assistant response container
+        # Prepare assistant response container with visual indicator
         with st.chat_message("assistant"):
+            status_box = st.status("💡 답변 준비 중...", expanded=True)
             response_placeholder = st.empty()
             sources_container = st.container()
 
@@ -96,14 +97,26 @@ def render_user_view(rag_engine: ConversationalRAGEngine, vector_store: Persiste
 
             for event in generator:
                 event_type = event.get("type")
-                if event_type == "sources":
+                if event_type == "status":
+                    stage = event.get("stage")
+                    msg = event.get("message")
+                    if stage in ("searching", "generating"):
+                        status_box.update(label=f"⏳ {msg}", state="running")
+                    elif stage == "streaming":
+                        status_box.update(label="✍️ 실시간 답변 출력 중...", state="running")
+                    elif stage == "done":
+                        status_box.update(label="✅ 답변 생성 완료", state="complete", expanded=False)
+                elif event_type == "sources":
                     retrieved_sources = event.get("content", [])
+                    if retrieved_sources:
+                        status_box.write(f"📖 **{len(retrieved_sources)}개**의 관련 문서 청크를 찾았습니다.")
                 elif event_type == "token":
                     full_response += event.get("content", "")
-                    response_placeholder.markdown(full_response + "▌")
+                    response_placeholder.markdown(full_response + " ▌")
                 elif event_type == "error":
                     full_response += f"\n\n⚠️ {event.get('content')}"
                     response_placeholder.markdown(full_response)
+                    status_box.update(label="⚠️ 오류 발생", state="error", expanded=True)
 
             # Finalize assistant text
             response_placeholder.markdown(full_response)

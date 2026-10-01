@@ -6,7 +6,6 @@ incremental vector DB ingestion, collection statistics, and document deletion.
 from pathlib import Path
 import streamlit as st
 from src.config import config
-from src.security.secrets_manager import secrets_manager
 from src.parsers.document_parser import DocumentParser
 from src.rag.chunker import DocumentChunker
 from src.rag.vector_store import PersistentVectorStore
@@ -49,8 +48,7 @@ def render_admin_view(vector_store: PersistentVectorStore):
     with st.expander("🛡️ 시스템 보안 및 환경 상태", expanded=False):
         col_s1, col_s2, col_s3 = st.columns(3)
         col_s1.metric("애플리케이션 환경", config.app_env.upper())
-        masked_key = secrets_manager.mask_secret(config.gemini_api_key)
-        col_s2.metric("Gemini API 키 상태", "설정됨" if "..." in masked_key else "미설정", help=masked_key)
+        col_s2.metric("LLM 모델", config.ollama_llm_model)
         col_s3.metric("영구 DB 경로", str(config.chroma_persist_dir.name))
 
     tabs = st.tabs(["📤 문서 업로드 및 임베딩", "📊 벡터 DB 현황 및 관리"])

@@ -15,7 +15,23 @@ class AppConfig(BaseModel):
     admin_port: int = Field(default_factory=lambda: int(secrets_manager.get_secret("ADMIN_PORT", "8501")))
     user_port: int = Field(default_factory=lambda: int(secrets_manager.get_secret("USER_PORT", "8502")))
 
-    # Local Ollama Configuration (Free, local, persistent)
+    # LLM Provider: "gemini" (Cloud API, no local Ollama required) or "ollama" (Local server)
+    llm_provider: str = Field(
+        default_factory=lambda: secrets_manager.get_secret("LLM_PROVIDER", "gemini")
+    )
+
+    # Google Gemini Cloud API Configuration (Free tier, fast streaming, highly scalable for multi-user)
+    gemini_api_key: str = Field(
+        default_factory=lambda: secrets_manager.get_secret("GEMINI_API_KEY", "")
+    )
+    gemini_model: str = Field(
+        default_factory=lambda: secrets_manager.get_secret("GEMINI_MODEL", "gemini-3.8-flash")
+    )
+    gemini_embed_model: str = Field(
+        default_factory=lambda: secrets_manager.get_secret("GEMINI_EMBED_MODEL", "text-embedding-004")
+    )
+
+    # Local Ollama Configuration (Optional fallback when running on local machine)
     ollama_base_url: str = Field(
         default_factory=lambda: secrets_manager.get_secret("OLLAMA_BASE_URL", "http://localhost:11434")
     )

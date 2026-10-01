@@ -4,7 +4,7 @@ Utilizes Ollama with high-performance Korean & multilingual embedding models (de
 Completely free, runs 100% on local hardware, no external API keys required.
 Includes resilient mock fallback for offline test environments.
 """
-from typing import List, Optional
+from typing import List, Optional, Any
 import numpy as np
 from src.config import config
 from src.rag.ollama_client import OllamaClient
@@ -78,8 +78,8 @@ class OllamaEmbeddingProvider:
             logger.error(f"Error calling Ollama embed for query: {e}. Falling back to deterministic vector.")
             return self._generate_mock_embedding(query)
 
-    def embed_documents(self, documents: List[str], batch_size: int = 16) -> List[List[float]]:
-        """Embeds a list of document strings with batching."""
+    def embed_documents(self, documents: List[str], batch_size: int = 4) -> List[List[float]]:
+        """Embeds a list of document strings with small batch size for local stability."""
         if not documents:
             return []
 
@@ -94,8 +94,84 @@ class OllamaEmbeddingProvider:
                 embeddings = self.client.embed(model=self.model_name, texts=batch)
                 all_embeddings.extend(embeddings)
             except Exception as e:
-                logger.error(f"Ollama batch embedding failed for [{i}:{i+len(batch)}]: {e}. Using fallback.")
+                logger.error(f"Ollama batch embedding failed for [{i}:{i+len(batch)}]: {e}. Trying individual items.")
                 for doc in batch:
                     all_embeddings.append(self.embed_query(doc))
 
         return all_embeddings
+
+
+class GeminiEmbeddingProvider:
+    """Manages document and query vector embeddings using Google Gemini Cloud API."""
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model_name: Optional[str] = None
+    ):
+        self.api_key = api_key or config.gemini_api_key
+        self.model_name = model_name or config.gemini_embed_model
+
+    def embed_query(self, query: str) -> List[float]:
+        """Embeds a single query string using Gemini."""
+        if not self.api_key:
+            logger.warning("Gemini API key not found. Using fallback embedding vector.")
+            return [0.0] * 768
+
+        try:
+            from google import genai
+            client = genai.Client(api_key=self.api_key)
+            result = client.models.embed_content(
+                model=self.model_name,
+                contents=query
+            )
+            if hasattr(result, "embedding") and hasattr(result.embedding, "values"):
+                return result.embedding.values
+            elif hasattr(result, "embeddings") and len(result.embeddings) > 0:
+                return result.embeddings[0].values
+            return [0.0] * 768
+        except Exception as e:
+            logger.error(f"Gemini embed_query error: {e}")
+            return [0.0] * 768
+
+    def embed_documents(self, documents: List[str], batch_size: int = 8) -> List[List[float]]:
+        """Embeds multiple document chunks with Gemini."""
+        if not documents:
+            return []
+        if not self.api_key:
+            return [[0.0] * 768 for _ in documents]
+
+        all_embeddings: List[List[float]] = []
+        try:
+            from google import genai
+            client = genai.Client(api_key=self.api_key)
+
+            for i in range(0, len(documents), batch_size):
+                batch = documents[i : i + batch_size]
+                result = client.models.embed_content(
+                    model=self.model_name,
+                    contents=batch
+                )
+                if hasattr(result, "embeddings"):
+                    all_embeddings.extend([emb.values for emb in result.embeddings])
+                else:
+                    for doc in batch:
+                        all_embeddings.append(self.embed_query(doc))
+            return all_embeddings
+        except Exception as e:
+            logger.error(f"Gemini embed_documents error: {e}")
+            for doc in documents:
+                all_embeddings.append(self.embed_query(doc))
+            return all_embeddings
+
+
+def get_embedding_provider() -> Any:
+    """Returns the most appropriate embedding provider based on available environment."""
+    ollama_provider = OllamaEmbeddingProvider()
+    if not ollama_provider.is_mock:
+        return ollama_provider
+    elif config.gemini_api_key:
+        logger.info("Using Gemini Cloud Embedding Provider.")
+        return GeminiEmbeddingProvider()
+    return ollama_provider
+

@@ -87,28 +87,34 @@ class HWPParser:
 
     @classmethod
     def _parse_hwp(cls, file_path: Path) -> Dict[str, Any]:
-        """Extracts text from binary HWP (OLE storage)."""
-        logger.info(f"Parsing HWP binary document: {file_path.name}")
+        """
+        Extracts clean text from binary HWP (OLE storage) using HWP 5.0 record specifications.
+        Selectively parses HWPTAG_PARA_TEXT (Tag 67) and skips inline extended control bytes
+        to prevent binary metadata from being misdecoded into corrupt Korean characters.
+        """
+        import struct
+        logger.info(f"Parsing HWP binary document using HWP 5.0 record parser: {file_path.name}")
         if not HAS_OLEFILE:
             raise RuntimeError("olefile library is required to parse .hwp files. Please install olefile.")
 
-        extracted_text_parts: List[str] = []
+        extracted_paragraphs: List[str] = []
 
         try:
             ole = olefile.OleFileIO(str(file_path))
             dirs = ole.listdir()
 
-            # Find all BodyText/Section streams
+            # Find all BodyText/Section streams in correct order
             section_streams = [
                 d for d in dirs if len(d) >= 2 and d[0] == "BodyText" and d[1].startswith("Section")
             ]
-            section_streams.sort(key=lambda x: x[1])
+            # Natural sort section streams (e.g. Section0, Section1, ...)
+            section_streams.sort(key=lambda x: int(x[1].replace("Section", "")) if x[1].replace("Section", "").isdigit() else x[1])
 
             for stream_path in section_streams:
                 stream_name = "/".join(stream_path)
                 data = ole.openstream(stream_path).read()
 
-                # HWP section streams are compressed with Deflate without zlib wrapper (raw deflate)
+                # HWP section streams are compressed with Deflate without zlib wrapper (raw deflate, wbits=-15)
                 try:
                     decompressed = zlib.decompress(data, -15)
                 except Exception:
@@ -117,33 +123,76 @@ class HWPParser:
                     except Exception:
                         decompressed = data
 
-                # Decode decompressed stream (HWP characters are encoded in UTF-16LE)
-                # Filter printable text
-                text_chars = []
-                idx = 0
-                while idx < len(decompressed) - 1:
-                    code = int.from_bytes(decompressed[idx:idx+2], byteorder="little")
-                    idx += 2
-                    # Common Korean/ASCII characters and whitespace
-                    if code in (10, 13, 9) or (32 <= code <= 126) or (0xAC00 <= code <= 0xD7A3):
-                        text_chars.append(chr(code))
-                    elif code == 0:
-                        continue
-                    elif 0x3000 <= code <= 0x303F or 0x2000 <= code <= 0x206F:
-                        text_chars.append(chr(code))
+                # Parse HWP 5.0 Records
+                offset = 0
+                buf_len = len(decompressed)
+                while offset + 4 <= buf_len:
+                    header = struct.unpack("<I", decompressed[offset:offset + 4])[0]
+                    tag_id = header & 0x3FF
+                    level = (header >> 10) & 0x3FF
+                    size = (header >> 20) & 0xFFF
+                    offset += 4
 
-                section_text = "".join(text_chars).strip()
-                if section_text:
-                    extracted_text_parts.append(section_text)
+                    if size == 0xFFF:
+                        if offset + 4 > buf_len:
+                            break
+                        size = struct.unpack("<I", decompressed[offset:offset + 4])[0]
+                        offset += 4
+
+                    record_data = decompressed[offset:offset + size]
+                    offset += size
+
+                    # Tag 67: HWPTAG_PARA_TEXT (Paragraph text stream)
+                    if tag_id == 67:
+                        chars: List[str] = []
+                        idx = 0
+                        rec_len = len(record_data)
+
+                        while idx + 2 <= rec_len:
+                            code = struct.unpack("<H", record_data[idx:idx + 2])[0]
+                            idx += 2
+
+                            # Extended and object control characters contain 16 bytes (8 words) of inline binary metadata
+                            # 1, 2, 3: Field start/end, bookmarks
+                            # 11~18: Drawings, tables, pictures, equations, footnotes, headers/footers
+                            # 21~23: Object controls
+                            if code in (1, 2, 3, 11, 12, 14, 15, 16, 17, 18, 21, 22, 23):
+                                idx += 16
+                            elif code in (4, 5, 6, 7, 8, 19, 20):
+                                # Other control codes (skip without additional data)
+                                pass
+                            elif code == 9:
+                                chars.append("\t")
+                            elif code == 10:
+                                chars.append("\n")
+                            elif code == 13:
+                                # Paragraph break handled per record
+                                pass
+                            elif code == 24:
+                                chars.append("-")
+                            elif code in (30, 31):
+                                chars.append(" ")
+                            elif 32 <= code < 0xD800 or 0xE000 <= code <= 0x10FFFF:
+                                chars.append(chr(code))
+
+                        p_text = "".join(chars).strip()
+                        if p_text:
+                            # Sanitize any unexpected non-encodable characters
+                            clean_p = p_text.encode("utf-8", "ignore").decode("utf-8").strip()
+                            if clean_p:
+                                extracted_paragraphs.append(clean_p)
 
             ole.close()
-            combined_text = "\n\n".join(extracted_text_parts)
+            combined_text = "\n\n".join(extracted_paragraphs)
+            combined_text = combined_text.encode("utf-8", "ignore").decode("utf-8")
+            logger.info(f"Successfully extracted {len(extracted_paragraphs)} paragraphs from {file_path.name}")
             return {
                 "text": combined_text,
                 "metadata": {
                     "source": file_path.name,
                     "format": "hwp",
                     "sections_count": len(section_streams),
+                    "paragraphs_count": len(extracted_paragraphs),
                     "file_size": file_path.stat().st_size
                 },
                 "tables": []
