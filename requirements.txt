@@ -5,8 +5,9 @@
 # Core Web App & UI
 streamlit>=1.35.0
 
-# LLM & Embedding (Google Gemini Official SDK)
+# LLM & Embedding (Google Gemini Official SDK & OpenAI)
 google-genai>=2.0.0
+openai>=1.0.0
 
 # Vector Database (Persistent Local Storage)
 chromadb>=0.5.0
@@ -24,12 +25,12 @@ olefile>=0.47
 tabulate>=0.9.0
 
 # OCR Engines (RapidOCR with ONNX Runtime & Tesseract)
-rapidocr-onnxruntime>=1.3.0; sys_platform != 'win32'
 rapidocr>=3.9.0
 onnxruntime>=1.18.0
 pytesseract>=0.3.10
 
-# Text Processing & Chunking
+# Text Processing, Embeddings & Chunking
+sentence-transformers>=3.0.0
 langchain-text-splitters>=0.2.0
 langchain-core>=0.2.0
 
@@ -38,18 +39,9 @@ tenacity>=8.3.0
 tqdm>=4.66.0
 python-dotenv>=1.0.1
 pydantic>=2.7.0
+truststore>=0.9.0
 
 # Testing & Quality
 pytest>=8.2.0
 pytest-asyncio>=0.23.0
 ruff>=0.4.0
-
-# Added tqdm for progress bar visualization
- tqdm
-
-openai>=1.0.0
-
--f https://download.pytorch.org/whl/cpu/torch_stable.html
-torch==2.5.0
-sentence-transformers
-ollama
