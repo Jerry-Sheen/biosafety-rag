@@ -18,20 +18,20 @@ from src.rag.vector_store import PersistentVectorStore
 from src.rag.openai_client import OpenAIClient
 from src.rag.gemini_client import GeminiModelResolver, classify_gemini_error
 from src.rag.law_search import LawSearchClient
+from src.rag.pathogen_registry import PathogenRegistry
 from src.security.logger import get_secure_logger
 import os
 
 logger = get_secure_logger("rag_engine")
 
-SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.  
-사용자가 특정 병원균 이름을 입력하면 반드시 다음 두 단계의 구조로 답변을 체계적으로 작성하세요:
+SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.
+사용자가 특정 병원균/바이러스에 대해 질문할 때, [1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황]은 시스템에 의해 사전에 100% 정밀 검증되어 사용자 화면에 이미 직접 출력되었습니다.
 
-[1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황 우선 제시]
-- 영구 벡터 DB 검색 결과를 바탕으로 해당 병원균에 적용되는 법령과 규제 대상 여부(생물체위험군 등급, 감염병예방법 고위험병원체, 생화학무기금지법 생물작용제, 유전자변형생물체법 국가관리대상병원체, 가축전염병예방법 특별관리병원체 등)를 표 또는 글머리 기호로 가장 먼저 명확히 제시하세요.
-- ★ 가독성 표기 원칙: 법령 적용 여부를 제시할 때, DB의 'True'는 반드시 '해당', 'False'는 반드시 '해당사항 없음'으로 명확하게 변환하여 표기하세요. (예: `감염병예방법(고위험병원체): 해당`, `수산생물질병관리법: 해당사항 없음`)
+따라서 당신은 1단계를 절대로 다시 출력하거나 요약·반복하지 마십시오.
+당신의 답변은 반드시 바로 아래의 [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]부터 시작해야 합니다.
 
-[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차 작성]
-- 법제처 웹사이트(https://www.law.go.kr) 및 국가법령정보센터 검색 결과에 기반하여, 해당 특정 병원균이 적용되는 법률별로(예: 감염병예방법, 화학생물무기금지법, 유전자변형생물체법, 가축전염병예방법 등) 각각 독립된 하위 섹션(### [법률명])을 나누어 작성하세요.
+[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차 작성 규칙]
+- 1단계에서 '해당'으로 확인된 모든 적용 법률(예: 《감염병의 예방 및 관리에 관한 법률》, 《화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률》, 《유전자변형생물체의 국가간 이동 등에 관한 법률》, 《가축전염병 예방법》 등)에 대해 빠짐없이 각각 독립된 하위 섹션(### [법률명])을 나누어 작성하세요.
 - 적용되는 각 법률마다 아래의 8대 항목을 하나도 빠짐없이 순서대로 설명하세요:
   1. 분리신고
   2. 이동(분양)신고
@@ -45,9 +45,201 @@ SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.
 - 각 법률의 8대 항목 설명 직후, 해당 법률에 따른 **'실무 가이드 절차'**를 구체적으로 작성하세요 (소관 부처, 신청/신고 시스템 포털명 및 URL, 단계별 절차 Step 1~3, 구비서류, 주의사항 등).
 
 [작성 주의사항]
+- 모델 자체의 편향된 상식으로 법률을 임의로 누락하거나 '해당없음'으로 왜곡하지 마십시오. 1단계에서 '해당'으로 명시된 법률은 2단계에서도 반드시 독립된 법률 섹션을 포함해야 합니다.
 - 법제처 웹사이트의 최신 법령(조항 번호, 시행일자)을 반영하여 핵심 내용을 알기 쉽게 요약하세요. 법령 원문을 그대로 복사하지 마세요.
 - 적용되는 법률들을 하나로 뭉뚱그려 설명하지 말고, 반드시 법률별로 각각 8대 항목과 실무 가이드 절차를 명확하게 분리하여 작성해야 합니다.
+
+[일반 질의에 대한 규칙]
+- 특정 병원균에 대한 질의가 아니라 연구시설 안전기준, 기관생물안전위원회(IBC), 법제도 일반사항 등 일반 질의인 경우 제공된 문서 컨텍스트를 충실히 반영하여 친절하고 정확하게 설명하세요.
 """
+
+
+def extract_pathogen_section(chunk_text: str, query: str = None) -> str:
+    """
+    Extracts the clean pathogen section from a chunk, stripping out preceding
+    overlap fragments from previous pathogens.
+    """
+    import re
+    if query:
+        clean_q = PersistentVectorStore._clean_query_for_matching(query).lower().replace(" ", "")
+        titles = list(re.finditer(r'\[(?:병원균/항목|항목/병원체명|병원체명|병원균):\s*([^\]]+)\]', chunk_text))
+        for m in titles:
+            full_title = m.group(1).lower().replace(" ", "")
+            if clean_q in full_title:
+                start_pos = m.start()
+                sub = chunk_text[start_pos:]
+                next_m = re.search(r'\[(?:병원균/항목|항목/병원체명|병원체명|병원균):\s*([^\]]+)\]', sub[len(m.group(0)):])
+                if next_m:
+                    return sub[:len(m.group(0)) + next_m.start()].strip()
+                return sub.strip()
+    first_m = re.search(r'\[(?:병원균/항목|항목/병원체명|병원체명|병원균):', chunk_text)
+    if first_m and first_m.start() > 0:
+        return chunk_text[first_m.start():].strip()
+    return chunk_text
+
+
+def parse_pathogen_chunk_attributes(chunk_text: str) -> Optional[Dict[str, Any]]:
+    """
+    Directly parses raw key-value lines from a pathogen chunk into authoritative structured attributes.
+    This eliminates LLM parsing hallucinations and ensures 100% agreement with the underlying DB.
+    """
+    import re
+    lines = [line.strip() for line in chunk_text.split('\n') if line.strip()]
+    header_idx = -1
+    for i, l in enumerate(lines):
+        if any(tag in l for tag in ['[병원균/항목:', '[항목/병원체명:', '[병원체명:', '[병원균:']):
+            header_idx = i
+            break
+    if header_idx == -1:
+        return None
+
+    title_m = re.search(r'\[(?:병원균/항목|항목/병원체명|병원체명|병원균):\s*([^\]]+)\]', lines[header_idx])
+    pathogen_name = title_m.group(1).strip() if title_m else lines[header_idx]
+
+    raw_attrs = {}
+    for line in lines[header_idx+1:]:
+        if line.startswith("["):  # Next header reached
+            break
+        if line.startswith("-"):
+            line = line[1:].strip()
+        if ":" in line:
+            k, v = line.split(":", 1)
+            k = k.strip()
+            v = v.strip()
+            if v.lower() == "true":
+                raw_attrs[k] = True
+            elif v.lower() == "false":
+                raw_attrs[k] = False
+            elif v.lower() in ("nan", "none", "null"):
+                raw_attrs[k] = None
+            else:
+                raw_attrs[k] = v
+
+    def _get_val(exact_keys, fallback_patterns):
+        for ek in exact_keys:
+            if ek in raw_attrs:
+                return raw_attrs[ek] is True
+        for pat in fallback_patterns:
+            for k, val in raw_attrs.items():
+                if pat in k:
+                    return val is True
+        return False
+
+    is_high_risk = _get_val(["감염병예방법(고위험병원체)", "감염병예방법"], ["고위험병원체"])
+    is_bioterror = _get_val(["감염병예방법(생물테러감염병병원체)", "생물테러감염병병원체"], ["생물테러"])
+    is_lmo = _get_val(["유전자변형생물체법(국가관리대상병원체)", "유전자변형생물체법"], ["국가관리대상병원체"])
+    is_bioweapon = _get_val(["생화학무기금지법(생물작용제)", "생화학무기금지법", "화학생물무기금지법(생물작용제)", "화학생물무기금지법"], ["생물작용제"])
+
+    # Veterinary regulation flags (handles typos and official legal names)
+    is_vet_class1 = _get_val(["가축병예방법_제1종", "가축전염병예방법 제1종", "가축전염병예방법_제1종"], ["제1종"])
+    is_vet_class2 = _get_val(["가축병예방법_제2종", "가축전염병예방법 제2종", "가축전염병예방법_제2종"], ["제2종"])
+    is_vet_class3 = _get_val(["가축병예방법_제3종", "가축전염병예방법 제3종", "가축전염병예방법_제3종"], ["제3종"])
+    is_vet_general = _get_val(
+        ["가축병전염예방법 및 수의생명자원관리규정(일반관리병원체)", "가축전염병예방법 및 수의생명자원관리규정(일반관리병원체)", "가축병예방법_일반관리", "가축전염병예방법_일반관리"],
+        ["일반관리병원체", "일반관리"]
+    )
+    is_vet_special = _get_val(
+        ["가축병전염예방법 및 수의생명자원관리규정(특별관리병원체)", "가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)", "가축병예방법_특별관리", "가축전염병예방법_특별관리"],
+        ["특별관리병원체", "특별관리"]
+    )
+    is_veterinary = is_vet_special or is_vet_general or is_vet_class1 or is_vet_class2 or is_vet_class3
+
+    is_aquatic = _get_val(["수산생물질병관리법"], ["수산생물"])
+
+    risk_group = raw_attrs.get("생물체위험군 분류") or raw_attrs.get("생물체위험군", "정보 없음")
+    if risk_group and not str(risk_group).endswith("등급") and str(risk_group).isdigit():
+        risk_group = f"제{risk_group}등급"
+    elif risk_group and not str(risk_group).startswith("제") and "등급" in str(risk_group):
+        risk_group = f"제{risk_group}"
+
+    remarks = raw_attrs.get("비고")
+
+    is_vet_class_any = is_vet_class1 or is_vet_class2 or is_vet_class3
+
+    step1_lines = [
+        "### [1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황]",
+        "",
+        f"제공된 영구 벡터 DB 검색 결과에 따른 **{pathogen_name}**의 생물체위험군 등급 및 법적 규제 속성 현황은 다음과 같습니다. (가독성 표기 원칙에 따라 DB의 속성값은 '해당' 및 '해당사항 없음'으로 명확하게 변환하여 표기하였습니다.)",
+        "",
+        f"* **생물체위험군 분류**: {risk_group}",
+        f"* **감염병예방법(고위험병원체)**: {'해당' if is_high_risk else '해당사항 없음'}",
+        f"* **감염병예방법(생물테러감염병병원체)**: {'해당' if is_bioterror else '해당사항 없음'}",
+        f"* **유전자변형생물체법(국가관리대상병원체)**: {'해당' if is_lmo else '해당사항 없음'}",
+        f"* **생화학무기금지법(생물작용제)**: {'해당' if is_bioweapon else '해당사항 없음'}",
+        f"* **가축전염병예방법 제1종(동물병원체)**: {'해당' if is_vet_class1 else '해당사항 없음'}",
+        f"* **가축전염병예방법 제2종(동물병원체)**: {'해당' if is_vet_class2 else '해당사항 없음'}",
+        f"* **가축전염병예방법 제3종(동물병원체)**: {'해당' if is_vet_class3 else '해당사항 없음'}",
+        f"* **가축전염병예방법 및 수의생명자원관리규정(일반관리병원체)**: {'해당' if is_vet_general else '해당사항 없음'}",
+        f"* **가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)**: {'해당' if is_vet_special else '해당사항 없음'}",
+        f"* **수산생물질병관리법**: {'해당' if is_aquatic else '해당사항 없음'}",
+    ]
+    if remarks and str(remarks).lower() not in ("nan", "none", "null", ""):
+        step1_lines.append(f"* **비고**: {remarks}")
+    step1_lines.append("")
+    step1_lines.append("---")
+    step1_lines.append("")
+
+    step1_markdown = "\n".join(step1_lines)
+
+    return {
+        "pathogen_name": pathogen_name,
+        "is_high_risk": is_high_risk,
+        "is_bioterror": is_bioterror,
+        "is_lmo": is_lmo,
+        "is_bioweapon": is_bioweapon,
+        "is_veterinary": is_veterinary,
+        "is_vet_class1": is_vet_class1,
+        "is_vet_class2": is_vet_class2,
+        "is_vet_class3": is_vet_class3,
+        "is_vet_general": is_vet_general,
+        "is_vet_special": is_vet_special,
+        "is_aquatic": is_aquatic,
+        "risk_group": risk_group,
+        "remarks": remarks,
+        "step1_markdown": step1_markdown,
+        "display_text": step1_markdown,
+        "raw_attributes": raw_attrs,
+    }
+
+
+def sanitize_llm_stream(chunk_iterable, has_step1_direct: bool):
+    """
+    Yields text chunks from LLM stream, suppressing any duplicated Step 1 output
+    if Step 1 was already directly injected by system.
+    """
+    if not has_step1_direct:
+        for chunk in chunk_iterable:
+            text = chunk.text if hasattr(chunk, "text") else str(chunk)
+            if text:
+                yield text
+        return
+
+    buffer = ""
+    step2_found = False
+    for chunk in chunk_iterable:
+        text = chunk.text if hasattr(chunk, "text") else str(chunk)
+        if not text:
+            continue
+        if step2_found:
+            yield text
+            continue
+        buffer += text
+        for trigger in ["### [2단계", "## [2단계", "[2단계", "### 2단계", "## 2단계", "2단계:"]:
+            if trigger in buffer:
+                idx = buffer.find(trigger)
+                step2_found = True
+                cleaned = buffer[idx:]
+                buffer = ""
+                yield cleaned
+                break
+        else:
+            if len(buffer) > 150 and not any(tag in buffer for tag in ["1단계", "[1단계", "### [1단계"]):
+                step2_found = True
+                yield buffer
+                buffer = ""
+
+    if buffer:
+        yield buffer
 
 
 class ConversationalRAGEngine:
@@ -154,12 +346,21 @@ class ConversationalRAGEngine:
 
         search_query = self.contextualize_query(query, chat_history)
 
+        # Step 1-B: Authoritative Master Registry Lookup (100% Deterministic Ground Truth)
+        pathogen_registry = PathogenRegistry.get_instance()
+        pathogen_info = pathogen_registry.find_pathogen(query)
+        if not pathogen_info and search_query != query:
+            pathogen_info = pathogen_registry.find_pathogen(search_query)
+
+        canonical_pathogen_name = pathogen_info["canonical_name"] if pathogen_info else query
+
         # Step 2: Retrieve relevant chunks from persistent ChromaDB
         from concurrent.futures import ThreadPoolExecutor
 
         def _search():
+            effective_search_query = canonical_pathogen_name if pathogen_info else search_query
             return self.vector_store.search(
-                query=search_query,
+                query=effective_search_query,
                 top_k=max(top_k, 6),
                 score_threshold=score_threshold,
             )
@@ -175,14 +376,52 @@ class ConversationalRAGEngine:
         finally:
             executor.shutdown(wait=False)
 
+        # Step 2-B: If pathogen was not found in registry, fallback to ChromaDB exact chunk search
+        if not pathogen_info:
+            direct_pathogen_chunk = self.vector_store.find_pathogen_chunk(query)
+            if not direct_pathogen_chunk and search_query != query:
+                direct_pathogen_chunk = self.vector_store.find_pathogen_chunk(search_query)
+
+            if direct_pathogen_chunk:
+                retrieved_chunks = [ch for ch in retrieved_chunks if ch.get("text") != direct_pathogen_chunk["text"]]
+                retrieved_chunks.insert(0, direct_pathogen_chunk)
+            else:
+                exact_chunk_idx = -1
+                for idx, ch in enumerate(retrieved_chunks):
+                    if PersistentVectorStore._is_exact_pathogen_match(query, ch.get("text", "")):
+                        exact_chunk_idx = idx
+                        break
+                if exact_chunk_idx > 0:
+                    exact_chunk = retrieved_chunks.pop(exact_chunk_idx)
+                    retrieved_chunks.insert(0, exact_chunk)
+
+            # Clean overlap noise from top pathogen chunk and parse authoritative attributes
+            if retrieved_chunks:
+                cleaned_top_text = extract_pathogen_section(retrieved_chunks[0]["text"], query)
+                pathogen_info = parse_pathogen_chunk_attributes(cleaned_top_text)
+                if pathogen_info:
+                    retrieved_chunks[0]["text"] = cleaned_top_text
+
         # Step 3: Analyze pathogen classification to identify applicable laws
         full_text_corpus = " ".join([c.get("text", "") for c in retrieved_chunks]) + " " + search_query
-        
-        # Determine applicable laws based on attributes found in ChromaDB chunks
-        is_bioweapon = any(k in full_text_corpus for k in ["생화학무기", "생물작용제", "화학무기"]) or ("생화학무기금지법(생물작용제)\tTrue" in full_text_corpus)
-        is_high_risk = any(k in full_text_corpus for k in ["고위험병원체", "감염병"]) or ("감염병예방법(고위험병원체)\tTrue" in full_text_corpus)
-        is_lmo = any(k in full_text_corpus for k in ["유전자변형", "LMO"]) or ("유전자변형생물체법" in full_text_corpus and "True" in full_text_corpus)
-        is_veterinary = any(k in full_text_corpus for k in ["가축전염병", "수의생명자원"]) or ("특별관리병원체)\tTrue" in full_text_corpus)
+
+        if pathogen_info:
+            is_bioweapon = pathogen_info["is_bioweapon"]
+            is_high_risk = pathogen_info["is_high_risk"]
+            is_lmo = pathogen_info["is_lmo"]
+            is_veterinary = pathogen_info["is_veterinary"]
+            official_attributes_block = (
+                "================================================================================\n"
+                "[★ 영구 벡터 DB에서 직접 확인된 1단계 공식 규제 속성 현황 (100% 신뢰 기준 데이터 - 절대 수정/누락 금지)]\n"
+                f"{pathogen_info['display_text']}\n"
+                "================================================================================"
+            )
+        else:
+            is_bioweapon = any(k in full_text_corpus for k in ["생화학무기", "생물작용제", "화학무기"]) or (": True" in full_text_corpus and "생화학무기금지법" in full_text_corpus)
+            is_high_risk = any(k in full_text_corpus for k in ["고위험병원체", "감염병"]) or (": True" in full_text_corpus and "감염병예방법" in full_text_corpus)
+            is_lmo = any(k in full_text_corpus for k in ["유전자변형", "LMO"]) or (": True" in full_text_corpus and "유전자변형생물체법" in full_text_corpus)
+            is_veterinary = any(k in full_text_corpus for k in ["가축전염병", "수의생명자원", "가축병전염", "특별관리병원체"]) or (": True" in full_text_corpus and "특별관리병원체" in full_text_corpus)
+            official_attributes_block = ""
 
         # Step 4: Law.go.kr real-time search & statutory provision mapping
         yield {
@@ -191,7 +430,7 @@ class ConversationalRAGEngine:
             "message": "법제처(law.go.kr)에서 최신 법령 조문 및 8대 의무 항목 검색 중..."
         }
         law_data = self.law_search_client.search_applicable_laws_for_pathogen(
-            pathogen_name=query,
+            pathogen_name=canonical_pathogen_name,
             detected_categories={
                 "is_bioweapon": is_bioweapon,
                 "is_high_risk": is_high_risk,
@@ -259,29 +498,39 @@ class ConversationalRAGEngine:
             )
         formatted_proc_context = "\n\n--------------------\n\n".join(proc_blocks)
 
+        has_step1 = bool(pathogen_info and pathogen_info.get("step1_markdown"))
+
+        if has_step1:
+            app_laws_list = pathogen_info.get("applicable_laws", [])
+            non_app_laws_list = pathogen_info.get("non_applicable_laws", [])
+            app_laws_str = "\n".join([f"- {law}" for law in app_laws_list]) if app_laws_list else "- (해당 없음)"
+            non_app_laws_str = "\n".join([f"- {law}" for law in non_app_laws_list]) if non_app_laws_list else "- (없음)"
+
+            prompt_instruction = (
+                f"■ [매우 중요 안내: 1단계는 시스템 코드가 마스터 DB에서 100% 검증하여 사용자 화면에 이미 직접 출력 완료함]\n"
+                f"아래 [1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황] 내용은 시스템 파이썬 코드가 마스터 데이터베이스에서 직접 확인하여 사용자 화면에 이미 출력했습니다:\n\n"
+                f"{pathogen_info['step1_markdown']}\n\n"
+                f"★ [1단계에서 '해당'으로 확정된 적용 법률 목록 - 반드시 2단계에서 빠짐없이 각각 독립된 섹션으로 상세 해설할 것]:\n"
+                f"{app_laws_str}\n\n"
+                f"★ [1단계에서 '해당사항 없음'으로 확정된 법률 목록 - 2단계 해설 대상 제외]:\n"
+                f"{non_app_laws_str}\n\n"
+                f"★ 절대 주의 규칙:\n"
+                f"1. 위의 [1단계] 표나 내용을 절대로 다시 출력하거나 요약·반복하지 마십시오! (중복 출력 엄격히 금지)\n"
+                f"2. 당신의 답변은 반드시 바로 '### [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]' 제목으로 시작해야 합니다.\n"
+                f"3. 위의 '적용 법률 목록'에 기재된 모든 법률에 대해 하나도 누락하지 말고, 각각 독립된 하위 섹션(### [법률명])을 나누어 8대 필수 항목 규제 내용과 실무 가이드 절차를 상세히 작성하세요.\n"
+                f"4. 각 법률마다 8대 항목(1. 분리신고 ~ 8. 인도신고)을 하나도 빠짐없이 순서대로 정리하고, 실무 절차(소관 부처, 포털명/URL, 단계별 절차 Step 1~3, 구비서류)를 구체적으로 작성하세요."
+            )
+        else:
+            prompt_instruction = (
+                f"제공된 검색 문서 및 지침서 데이터를 바탕으로 사용자의 질문에 대해 신뢰할 수 있고 구체적인 전문 답변을 작성하세요."
+            )
+
         user_prompt_with_context = (
-            f"[검색 대상 병원체]\n{query}\n\n"
+            f"[사용자 질의]\n{query}\n\n"
             f"[1. 영구 벡터 DB 검색 결과 - 병원체 분류 및 규제 대상 현황 데이터]\n{formatted_primary_context}\n\n"
             f"[2. 법제처(국가법령정보센터) 검색 결과 - 적용 법률별 8대 항목 및 실무 절차 데이터]\n{law_context_str}\n\n"
             f"[3. 실무 지침서 및 상세 신고·허가 가이드 데이터]\n{formatted_proc_context}\n\n"
-            f"[사용자 요청]\n{query}\n\n"
-            f"위 검색 결과를 바탕으로 반드시 다음 2개 파트로 나누어 체계적으로 답변을 작성하세요:\n\n"
-            f"■ [1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황 우선 제시]\n"
-            f"- '영구 벡터 DB' 검색 결과에 나타난 {query}의 생물체위험군 등급 및 법적 규제 속성(감염병예방법 고위험병원체, 화학생물무기금지법 생물작용제, 유전자변형생물체법 국가관리대상병원체, 가축전염병예방법 특별관리병원체, 수산생물질병관리법 등)을 표 또는 글머리 기호로 가장 먼저 명확하게 제시하세요.\n"
-            f"- ★ 가독성 표기 원칙: DB 상의 속성값 중 'True'는 반드시 '해당', 'False'는 반드시 '해당사항 없음'으로 변환하여 표기하세요. (예: 감염병예방법(고위험병원체): 해당, 수산생물질병관리법: 해당사항 없음)\n\n"
-            f"■ [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]\n"
-            f"- 법제처 웹사이트/국가법령정보센터 검색 결과에 기반하여, 해당 병원체({query})가 적용되는 법률별로(예: 《감염병의 예방 및 관리에 관한 법률》, 《화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률》 등) 각각 독립된 하위 섹션(### [법률명])을 나누어 작성하세요.\n"
-            f"- 적용되는 각 법률마다 아래 8대 항목의 규제 내용(해당 없을 시 반드시 '해당없음'과 사유 명시)을 빠짐없이 순서대로 정리하세요:\n"
-            f"  1. 분리신고\n"
-            f"  2. 이동(분양)신고\n"
-            f"  3. 보유·폐기신고\n"
-            f"  4. 제조신고 및 개발실험승인\n"
-            f"  5. 수입(반입)신고\n"
-            f"  6. 인수신고\n"
-            f"  7. 수출신고\n"
-            f"  8. 인도신고\n"
-            f"- 그리고 각 법률별 8대 항목 설명 바로 아래에, 해당 법률에 따른 **'실무 가이드 절차'**(신고/접수 포털 시스템명 및 링크, 단계별 실무 프로세스 Step 1~3, 구비서류 및 주의사항)를 구체적으로 작성하세요.\n"
-            f"(※ 주의: 법률들을 하나로 합쳐서 설명하지 말고, 반드시 법률별로 각각 8대 항목과 실무 가이드를 별도로 분리하여 작성해야 합니다.)"
+            f"[답변 지침]\n{prompt_instruction}"
         )
 
         # Step 7: Generation
@@ -291,6 +540,18 @@ class ConversationalRAGEngine:
             "stage": "generating",
             "message": f"{active_model} 모델로 최신 법령 기반 종합 안내 생성 중..."
         }
+
+        # Step 1 확정 직결 스트리밍 (환각 0% 보장: DB 원본 데이터를 화면에 직접 주입)
+        if has_step1:
+            yield {
+                "type": "status",
+                "stage": "streaming",
+                "message": "1단계 규제 속성 현황 확인 완료 (DB 100% 직결) 및 2단계 실무 가이드 생성 중..."
+            }
+            yield {
+                "type": "token",
+                "content": pathogen_info["step1_markdown"]
+            }
 
         def _format_citations() -> str:
             citation_lines = ["\n\n---\n**📚 참고 법령 및 공식 출처**"]
@@ -352,12 +613,11 @@ class ConversationalRAGEngine:
                 )
 
                 first_token = True
-                for chunk in response_stream:
-                    if chunk.text:
-                        if first_token:
-                            first_token = False
-                            yield {"type": "status", "stage": "streaming", "message": "답변 스트리밍 중..."}
-                        yield {"type": "token", "content": chunk.text}
+                for chunk_text in sanitize_llm_stream(response_stream, has_step1_direct=has_step1):
+                    if first_token:
+                        first_token = False
+                        yield {"type": "status", "stage": "streaming", "message": "2단계 실시간 법령 및 실무 절차 스트리밍 중..."}
+                    yield {"type": "token", "content": chunk_text}
 
                 # 스트리밍 완료 후 법제처 및 문서 출처 추가 출력
                 try:
@@ -395,11 +655,11 @@ class ConversationalRAGEngine:
                     system=SYSTEM_PROMPT
                 )
                 first_token = True
-                for token in stream:
+                for chunk_text in sanitize_llm_stream(stream, has_step1_direct=has_step1):
                     if first_token:
                         first_token = False
-                        yield {"type": "status", "stage": "streaming", "message": "답변 스트리밍 중..."}
-                    yield {"type": "token", "content": token}
+                        yield {"type": "status", "stage": "streaming", "message": "2단계 실시간 법령 및 실무 절차 스트리밍 중..."}
+                    yield {"type": "token", "content": chunk_text}
                 try:
                     yield {"type": "token", "content": _format_citations()}
                 except Exception as cite_err:

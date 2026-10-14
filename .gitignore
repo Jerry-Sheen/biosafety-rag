@@ -40,8 +40,11 @@ env/
 env.bak/
 venv.bak/
 
-# Vector DB & Storage Data (data/chroma_db is tracked for deployment)
-data/uploads/
+# Vector DB & Storage Data (data/chroma_db and reference datasets are tracked for deployment)
+data/uploads/*
+!data/uploads/*.json
+!data/reference/
+!data/reference/**
 /chroma_db/
 /uploads/
 *.db

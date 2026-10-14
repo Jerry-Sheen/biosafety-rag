@@ -144,6 +144,120 @@ class PersistentVectorStore:
         logger.info(f"Successfully batch added {len(chunks)} chunks.")
         return len(chunks)
 
+    @staticmethod
+    def _clean_query_for_matching(query: str) -> str:
+        """Removes conversational phrases and Korean particles to extract core entity name."""
+        q = (query or "").strip()
+        phrases = [
+            "에 대해 알려줘", "에 대해 설명해줘", "에 대한 규제", "에 대해", "에 대한",
+            "알려줘", "설명해줘", "규제 현황", "규제 대상", "규제", "법령"
+        ]
+        for p in phrases:
+            q = q.replace(p, " ")
+
+        particles = ["에서는", "에서", "에게", "으로", "로는", "이란", "라는", "은", "는", "이", "가", "을", "를", "의", "와", "과", "로", "도", "만", "에", "란"]
+        tokens = q.split()
+        cleaned_tokens = []
+        for tok in tokens:
+            t = tok.strip()
+            for p in sorted(particles, key=len, reverse=True):
+                if t.endswith(p) and len(t) - len(p) >= 2:
+                    t = t[:-len(p)]
+                    break
+            if t:
+                cleaned_tokens.append(t)
+        return " ".join(cleaned_tokens)
+
+    @classmethod
+    def _is_exact_pathogen_match(cls, query: str, doc_text: str) -> bool:
+        """
+        Determines whether the document chunk represents the exact pathogen queried.
+        Scans all pathogen title headers in the chunk to properly handle chunking overlap.
+        Distinguishes specific variants (e.g. 'Variola virus' vs 'Variola minor virus').
+        """
+        import re
+        q_clean = cls._clean_query_for_matching(query).lower()
+        if not q_clean:
+            q_clean = query.lower().strip()
+
+        titles = re.findall(r'\[(?:병원균/항목|항목/병원체명|병원체명|병원균):\s*([^\]]+)\]', doc_text)
+        if not titles:
+            return False
+
+        q_nospace = q_clean.replace(" ", "")
+        for full_title in titles:
+            parens = [p.strip().lower() for p in re.findall(r'\(([^)]+)\)', full_title)]
+            base_name = re.sub(r'\([^)]+\)', '', full_title).strip().lower()
+            candidates = [base_name] + parens
+
+            for cand in candidates:
+                cand_nospace = cand.replace(" ", "")
+                if not cand_nospace or len(cand_nospace) < 2:
+                    continue
+                # 1) Exact match
+                if q_clean == cand or q_nospace == cand_nospace:
+                    return True
+                # 2) Candidate is contained in query (e.g. cand is '콜레라균', query is '콜레라균의 규제 현황')
+                if cand_nospace in q_nospace:
+                    idx = q_nospace.find(cand_nospace)
+                    if idx > 0 and q_nospace[idx-1] == '소':
+                        if cand_nospace in ("두창바이러스", "두창"):
+                            continue
+                    return True
+                # 3) Query is contained in candidate (e.g. query is '콜레라', cand is '콜레라균')
+                if q_nospace in cand_nospace:
+                    idx = cand_nospace.find(q_nospace)
+                    if idx == 0:
+                        return True
+        return False
+
+    def find_pathogen_chunk(self, query: str) -> Optional[Dict[str, Any]]:
+        """
+        Directly scans ChromaDB for the exact pathogen chunk matching any pathogen
+        name mentioned in the query. Guarantees 100% retrieval regardless of vector similarity.
+        """
+        import re
+        raw_tokens = re.findall(r'[a-zA-Z]{3,}|[가-힣]{2,}', query)
+        stopwords = {
+            "대해", "대한", "대하여", "설명해줘", "설명", "알려줘", "알려", "무엇인가", "무엇인지",
+            "관련", "관련된", "어떤", "있는", "내용", "정리해줘", "말해줘", "요약해줘", "특징",
+            "정보", "종류", "항목", "규정", "법령", "규제", "현황", "적용", "대상"
+        }
+        korean_particles = ["에서는", "에서", "에게", "으로", "로는", "이란", "라는", "은", "는", "이", "가", "을", "를", "의", "와", "과", "로", "도", "만", "에", "란"]
+        tokens = []
+        for t in raw_tokens:
+            cleaned = t.strip()
+            for p in sorted(korean_particles, key=len, reverse=True):
+                if cleaned.endswith(p) and len(cleaned) - len(p) >= 2:
+                    cleaned = cleaned[:-len(p)]
+                    break
+            if cleaned not in stopwords and len(cleaned) >= 2 and cleaned not in tokens:
+                tokens.append(cleaned)
+            # Decompose common pathogen suffixes like 바이러스, 균
+            for suffix in ["바이러스", "균"]:
+                if cleaned.endswith(suffix) and len(cleaned) - len(suffix) >= 2:
+                    sub = cleaned[:-len(suffix)]
+                    if sub not in stopwords and sub not in tokens:
+                        tokens.append(sub)
+
+        for tok in tokens:
+            try:
+                res = self.collection.get(where_document={"$contains": tok}, limit=15)
+                docs = res.get("documents", [])
+                metas = res.get("metadatas", [])
+                for d, m in zip(docs, metas):
+                    if self._is_exact_pathogen_match(query, d):
+                        return {
+                            "text": d,
+                            "metadata": m,
+                            "similarity": 1.0,
+                            "distance": 0.0,
+                            "exact_match": True,
+                        }
+            except Exception as e:
+                logger.debug(f"find_pathogen_chunk error for token '{tok}': {e}")
+        return None
+
     def search(self, query: str, top_k: int = 5, score_threshold: float = 0.0) -> List[Dict[str, Any]]:
         """Search collection with query embedding; returns matched chunks."""
         if self.collection.count() == 0:
@@ -197,32 +311,42 @@ class PersistentVectorStore:
 
         matched_dict = {}
 
-        # (A) 벡터 검색 결과 등록 및 키워드 가중치 부스팅
+        # (0) 쿼리 정제 및 병원체명 완전 일치 판별 헬퍼
+        clean_q = self._clean_query_for_matching(query)
+
+        # (A) 벡터 검색 결과 등록 및 키워드/정밀 일치 가중치 부스팅
         for doc, meta, dist in zip(docs, metas, distances):
             base_sim = max(0.0, 1.0 - dist)
             doc_lower = doc.lower()
             keyword_hits = sum(1 for kw in keywords if kw in doc_lower)
 
+            is_exact = self._is_exact_pathogen_match(query, doc)
+
             boost = 0.0
-            if keyword_hits > 0:
+            if is_exact:
+                boost = 1.0  # 완전 일치 항목은 무조건 최상위(1.0)
+            elif keyword_hits > 0:
                 boost = min(0.40, keyword_hits * 0.15)
-                # 제목/엔티티 라인에 직접 키워드가 포함된 경우 추가 우선순위 부여
                 first_line = doc_lower.split('\n')[0]
                 if any(kw in first_line for kw in keywords):
                     boost += 0.25
 
-            final_sim = min(1.0, base_sim + boost)
+            final_sim = 1.0 if is_exact else min(1.0, base_sim + boost)
             if final_sim >= score_threshold:
                 matched_dict[doc] = {
                     "text": doc,
                     "metadata": meta,
                     "similarity": round(final_sim, 4),
-                    "distance": round(dist, 4),
+                    "distance": 0.0 if is_exact else round(dist, 4),
+                    "exact_match": is_exact,
                 }
 
-        # (B) 핵심 키워드 직접 컬렉션 검색 (True Hybrid: 무조건 병합)
-        # 질문 내 고유명사/학명 등 핵심 키워드가 포함된 청크를 무조건 발굴하여 후보에 합침
-        for kw in keywords[:4]:
+        # (B) 핵심 키워드 및 정제 쿼리 직접 컬렉션 검색 (True Hybrid: 무조건 병합)
+        search_terms = list(keywords[:4])
+        if clean_q and clean_q not in search_terms:
+            search_terms.insert(0, clean_q)
+
+        for kw in search_terms:
             try:
                 kw_results = self.collection.get(
                     where_document={"$contains": kw},
@@ -236,25 +360,41 @@ class PersistentVectorStore:
                     hits = sum(1 for k in keywords if k in kd_lower)
                     first_line = kd_lower.split('\n')[0]
                     title_match = any(k in first_line for k in keywords)
+                    is_exact = self._is_exact_pathogen_match(query, kd)
 
-                    # 키워드 직접 일치 점수 산정 (최소 0.88, 복수 일치/제목 일치 시 0.95+)
-                    kw_sim = 0.88 + min(0.08, hits * 0.03) + (0.04 if title_match else 0.0)
-                    kw_sim = min(1.0, kw_sim)
+                    if is_exact:
+                        kw_sim = 1.0
+                    else:
+                        kw_sim = 0.88 + min(0.08, hits * 0.03) + (0.04 if title_match else 0.0)
+                        kw_sim = min(1.0, kw_sim)
 
                     if kd in matched_dict:
-                        matched_dict[kd]["similarity"] = max(matched_dict[kd]["similarity"], round(kw_sim, 4))
+                        if is_exact:
+                            matched_dict[kd]["exact_match"] = True
+                            matched_dict[kd]["similarity"] = 1.0
+                            matched_dict[kd]["distance"] = 0.0
+                        else:
+                            matched_dict[kd]["similarity"] = max(matched_dict[kd]["similarity"], round(kw_sim, 4))
                     else:
                         matched_dict[kd] = {
                             "text": kd,
                             "metadata": km,
                             "similarity": round(kw_sim, 4),
-                            "distance": round(1.0 - kw_sim, 4),
+                            "distance": 0.0 if is_exact else round(1.0 - kw_sim, 4),
+                            "exact_match": is_exact,
                         }
             except Exception as kw_e:
                 logger.debug(f"Keyword search notice for '{kw}': {kw_e}")
 
         matched = list(matched_dict.values())
-        matched.sort(key=lambda x: x["similarity"], reverse=True)
+        matched.sort(key=lambda x: (x.get("exact_match", False), x["similarity"]), reverse=True)
+
+        # (C) 보장 단계: 쿼리 내 병원체가 언급된 경우 직렬 전용 검색으로 반드시 Top-1 보장
+        direct_chunk = self.find_pathogen_chunk(query)
+        if direct_chunk:
+            matched = [m for m in matched if m.get("text") != direct_chunk["text"]]
+            matched.insert(0, direct_chunk)
+
         return matched[:top_k]
 
     def get_stats(self) -> Dict[str, Any]:
