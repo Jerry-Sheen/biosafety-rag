@@ -126,5 +126,25 @@ def test_parse_pathogen_chunk_fallback():
     assert "* **가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)**: 해당" in res["step1_markdown"]
 
 
+def test_law_search_precautions():
+    """Test that LawSearchClient includes structured precautions (penalties, joint liability, etc.)."""
+    from src.rag.law_search import LawSearchClient, CORE_LAWS_KNOWLEDGE
+    client = LawSearchClient()
+    for law_key, data in CORE_LAWS_KNOWLEDGE.items():
+        assert "precautions" in data, f"Missing precautions in {law_key}"
+        prec = data["precautions"]
+        assert "형사처벌 및 행정처분" in prec
+        assert "양벌규정" in prec
+        assert "보관 및 운송 규정" in prec
+        assert "위험물질 취급 제한" in prec
+
+    # Test format_law_context_for_prompt includes category 3. 주의사항
+    sample_law_data = client.search_applicable_laws_for_pathogen("페스트균", {"is_high_risk": True, "is_bioweapon": True})
+    formatted = client.format_law_context_for_prompt(sample_law_data)
+    assert "3. 주의사항" in formatted
+    assert "형사처벌" in formatted
+    assert "양벌규정" in formatted
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

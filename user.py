@@ -256,7 +256,7 @@ def run_streamlit_app():
 # Set page config before any other Streamlit calls
     try:
         st.set_page_config(
-            page_title="RAG Vibe - 생물안전 및 독소 지식 대화 시스템",
+            page_title="Biosafety Chatbot - 생물안전 및 독소 지식 대화 시스템",
             page_icon="💬",
             layout="wide",
             initial_sidebar_state="expanded",
@@ -496,7 +496,7 @@ def run_streamlit_app():
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="user-header">💬 생물작용제 및 독소 안전관리 RAG 지식 대화</div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-header">💬 KRIBB Biosafety Chatbot - 생명(연) 생물안전관리 챗봇 </div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="user-desc">업로드 및 파싱된 생물안전 문서, 법령, 고시, 지침을 바탕으로 정확하고 신뢰할 수 있는 답변을 제공합니다.</div>',
         unsafe_allow_html=True
@@ -513,7 +513,7 @@ def run_streamlit_app():
                         st.text(src["text"][:400] + "...")
 
     # Chat input box
-    if prompt := st.chat_input("생물작용제 및 독소 관련 질문을 입력하세요..."):
+    if prompt := st.chat_input("병원균, 위험균, 생물작용제 및 독소에 대한 질문을 입력하세요..."):
         # Check API key configuration before running RAG search
         current_api_key = rag_engine.gemini_api_key if rag_engine.llm_provider == "gemini" else rag_engine.openai_api_key
         if not current_api_key or not current_api_key.strip():
