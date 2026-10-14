@@ -40,13 +40,17 @@ env/
 env.bak/
 venv.bak/
 
-# Vector DB & Storage Data
-data/chroma_db/
+# Vector DB & Storage Data (data/chroma_db is tracked for deployment)
 data/uploads/
-chroma_db/
-uploads/
+/chroma_db/
+/uploads/
 *.db
 *.sqlite3
+!data/chroma_db/
+!data/chroma_db/**
+!data/chroma_db/*.sqlite3
+
+
 
 # Chat sessions & Local history
 data/chat_sessions/
