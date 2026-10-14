@@ -41,7 +41,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import config
-from src.rag.openai_client import OpenAIClient
 
 
 def run_check_ocr():
@@ -349,7 +348,8 @@ def run_streamlit_app():
             st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
             st.session_state.user_messages = _default_messages()
 
-    # Initialize vector store and RAG engine with fresh thread-safe connection
+    # Initialize vector store with st.cache_resource to prevent OOM crash
+    @st.cache_resource(show_spinner="지식 베이스(ChromaDB)를 연결하는 중...")
     def _get_vector_store():
         return PersistentVectorStore()
 
@@ -407,6 +407,7 @@ def run_streamlit_app():
                 help=".env에 OPENAI_API_KEY를 설정하거나 여기에 직접 입력하세요."
             )
             if api_key_input:
+                from src.rag.openai_client import OpenAIClient
                 rag_engine.openai_api_key = api_key_input
                 rag_engine.openai_client = OpenAIClient(api_key=api_key_input, model=rag_engine.openai_model)
             st.caption(f"🟢 모델: `{rag_engine.openai_model}`")
@@ -421,6 +422,7 @@ def run_streamlit_app():
         if stats['total_chunks'] == 0:
             st.warning("⚠️ 지식 베이스 청크가 0개입니다.")
             if st.button("🔄 지식 베이스 다시 연결", use_container_width=True):
+                st.cache_resource.clear()
                 st.rerun()
 
         st.divider()
