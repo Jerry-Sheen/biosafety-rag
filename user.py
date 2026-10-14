@@ -349,15 +349,9 @@ def run_streamlit_app():
             st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
             st.session_state.user_messages = _default_messages()
 
-    # Initialize vector store and RAG engine with dynamic recovery
-    def _get_vector_store(force_reload: bool = False):
-        if force_reload or "vector_store_instance" not in st.session_state:
-            st.session_state["vector_store_instance"] = PersistentVectorStore()
-        else:
-            store = st.session_state["vector_store_instance"]
-            if store.collection.count() == 0:
-                st.session_state["vector_store_instance"] = PersistentVectorStore()
-        return st.session_state["vector_store_instance"]
+    # Initialize vector store and RAG engine with fresh thread-safe connection
+    def _get_vector_store():
+        return PersistentVectorStore()
 
     try:
         vector_store = _get_vector_store()
@@ -427,7 +421,6 @@ def run_streamlit_app():
         if stats['total_chunks'] == 0:
             st.warning("⚠️ 지식 베이스 청크가 0개입니다.")
             if st.button("🔄 지식 베이스 다시 연결", use_container_width=True):
-                st.session_state.pop("vector_store_instance", None)
                 st.rerun()
 
         st.divider()

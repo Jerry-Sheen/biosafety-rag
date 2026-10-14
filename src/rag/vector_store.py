@@ -56,13 +56,13 @@ class PersistentVectorStore:
             metadata={"hnsw:space": "cosine"},
         )
         # If collection already contains data, infer its dimension
-        if self.collection.count() > 0:
-            try:
+        try:
+            if self.collection.count() > 0:
                 first_emb = self.collection.get(limit=1, include=["embeddings"]).get("embeddings", [])[0]
                 self._expected_dimension = len(first_emb)
                 logger.info(f"Detected existing collection dimension: {self._expected_dimension}")
-            except Exception:
-                logger.warning("Unable to infer existing collection dimension; will rely on provider.")
+        except Exception as e:
+            logger.warning(f"Notice: unable to infer existing collection dimension: {e}")
 
     # ---------------------------------------------------------------------
     # Internal helpers
@@ -261,9 +261,8 @@ class PersistentVectorStore:
         """Return summary statistics of the collection."""
         try:
             count = self.collection.count()
-        except NotFoundError:
-            logger.warning(f"Collection '{self.collection_name}' not found. Recreating.")
-            self.reset_collection()
+        except Exception as e:
+            logger.warning(f"Collection count warning for '{self.collection_name}': {e}")
             count = 0
         if count == 0:
             return {
@@ -272,7 +271,11 @@ class PersistentVectorStore:
                 "document_sources": [],
                 "source_chunk_counts": {},
             }
-        all_meta = self.collection.get(include=["metadatas"]).get("metadatas", [])
+        try:
+            all_meta = self.collection.get(include=["metadatas"]).get("metadatas", [])
+        except Exception as e:
+            logger.warning(f"Collection get metadatas warning: {e}")
+            all_meta = []
         sources = set()
         source_counts: Dict[str, int] = {}
         for m in all_meta:
