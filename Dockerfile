@@ -2,7 +2,7 @@
 # Multi-Stage Secure Dockerfile for RAG Vibe Application
 # ==============================================================================
 
-FROM python:3.12-slim as base
+FROM python:3.12-slim AS base
 
 # Set environment variables for Python & Streamlit
 ENV PYTHONUNBUFFERED=1 \
@@ -24,9 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install python dependencies
+# Install python dependencies (with BuildKit cache)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# --mount creates a persistent cache directory on the host that survives subsequent builds.
+# It dramatically speeds up repeated `pip install` executions because large wheels are downloaded only once.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
 
 # Create non-root user for security (Principle of Least Privilege)
 RUN useradd -m -u 1000 appuser && \
@@ -46,3 +49,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 EXPOSE 8501
 
 ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+

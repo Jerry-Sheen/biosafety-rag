@@ -62,10 +62,10 @@ class TestRagVibeCore(unittest.TestCase):
     def test_vector_store_if_chroma_installed(self):
         try:
             from src.rag.vector_store import PersistentVectorStore
-            from src.rag.embeddings import OllamaEmbeddingProvider
+            from src.rag.embeddings import LocalEmbeddingProvider
 
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
-                embedder = OllamaEmbeddingProvider(base_url="http://localhost:11434")
+                embedder = LocalEmbeddingProvider()
                 vs = PersistentVectorStore(
                     persist_directory=Path(tmp_dir),
                     collection_name="test_col",

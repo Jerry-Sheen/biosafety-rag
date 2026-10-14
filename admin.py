@@ -8,7 +8,7 @@ Admin Application (admin.py)
 기능:
 1. PDF, EXCEL, Word, CSV, HWP/HWPX 등 다양한 문서 다중 동시 업로드.
 2. 스캔 PDF 이미지 OCR 및 Docling 기반 구조화(텍스트, 표, 메타데이터) 변환.
-3. 문서 청킹 및 로컬 임베딩(Ollama bge-m3) 후 영구 벡터 DB(ChromaDB)에 저장.
+3. 문서 청킹 및 로컬 임베딩(SentenceTransformers, user.py와 동일 모델 고정) 후 영구 벡터 DB(ChromaDB)에 저장. (Ollama 지원 제거됨)
 4. 증분 저장(Incremental Ingestion): 기존 데이터를 덮어쓰지 않고 새로운 문서 계속 추가.
 5. 등록 문서 현황 조회, 개별 문서 삭제, 전체 DB 초기화 지원.
 ==============================================================================
@@ -21,7 +21,6 @@ from src.security.secrets_manager import secrets_manager
 from src.parsers.document_parser import DocumentParser
 from src.rag.chunker import DocumentChunker
 from src.rag.vector_store import PersistentVectorStore
-from src.rag.ollama_client import OllamaClient
 from src.security.logger import get_secure_logger
 
 logger = get_secure_logger("admin_app")
@@ -77,8 +76,9 @@ def main():
         unsafe_allow_html=True
     )
 
+    # Initialize vector store (fixed local embedding model shared with user.py; Ollama removed)
     vector_store = get_vector_store()
-    ollama_client = OllamaClient(base_url=config.ollama_base_url)
+
 
     # 1. Admin PIN Verification
     if "admin_authenticated" not in st.session_state:
@@ -98,26 +98,19 @@ def main():
             st.caption(f"기본 PIN은 `.env`의 `ADMIN_ACCESS_PIN`에 설정되어 있습니다 (기본: {config.admin_access_pin})")
         return
 
-    # 2. Sidebar - System & Ollama Status
+    # 2. Sidebar - System & Embedding Status
     with st.sidebar:
         st.subheader("🖥️ 시스템 상태")
         st.markdown(f"**환경:** `{config.app_env.upper()}`")
         st.markdown(f"**영구 DB 경로:** `{config.chroma_persist_dir.name}`")
 
         st.divider()
-        st.subheader("🦙 로컬 Ollama 상태")
-        ollama_status = ollama_client.check_connection()
-        if ollama_status["connected"]:
-            st.success(f"연결됨: `{config.ollama_base_url}`")
-            st.markdown(f"**임베딩 모델:** `{config.ollama_embed_model}`")
-            st.markdown(f"**설치된 모델 수:** {len(ollama_status['models'])}개")
-            with st.expander("설치된 모델 목록"):
-                for m in ollama_status["models"]:
-                    st.text(f"• {m}")
-        else:
-            st.warning(f"Ollama 미연결: `{config.ollama_base_url}`")
-            st.caption("터미널에서 `ollama serve`를 실행해주세요.")
-            st.code(f"ollama pull {config.ollama_embed_model}", language="bash")
+        st.subheader("🔧 임베딩 모델 (고정)")
+        st.info(
+            f"`{vector_store.embedding_provider.model_name}`\n\n"
+            f"차원: {vector_store.embedding_provider.dimension} · 로컬 실행(무료)\n\n"
+            "user.py와 동일한 모델을 사용하므로 새로고침/재시작 시에도 데이터가 유지됩니다."
+        )
 
         st.divider()
         if st.button("🚪 관리자 로그아웃", use_container_width=True):
@@ -134,7 +127,7 @@ def main():
 
         uploaded_files = st.file_uploader(
             "문서를 선택하거나 여기에 드래그 앤 드롭하세요:",
-            type=["pdf", "docx", "doc", "xlsx", "xls", "csv", "hwp", "hwpx", "txt", "md"],
+            type=["pdf", "docx", "doc", "xlsx", "xls", "csv", "hwp", "hwpx", "txt", "md", "json"],
             accept_multiple_files=True
         )
 
@@ -151,48 +144,74 @@ def main():
 
         # Ingestion Button
         if st.button("🚀 문서 파싱 및 벡터 DB 추가 (Incremental Ingestion)", type="primary", disabled=not uploaded_files):
+            # Initialize progress placeholders
             progress_bar = st.progress(0)
             status_text = st.empty()
+            percent_text = st.empty()
 
             parser = DocumentParser(prefer_docling=use_docling, enable_ocr=use_ocr)
             chunker = DocumentChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
             total_files = len(uploaded_files)
+            total_steps = total_files * 2  # parsing + embedding for each file
+            completed_steps = 0
             total_added_chunks = 0
             success_files = []
             failed_files = []
 
             for idx, uploaded_file in enumerate(uploaded_files):
                 filename = uploaded_file.name
-                status_text.text(f"[{idx+1}/{total_files}] 파싱 중: {filename}...")
 
+                # Step 1: Parsing
+                status_text.text(f"[{idx+1}/{total_files}] 파싱 중: {filename}...")
                 # Save file to upload directory
                 save_path = config.upload_dir / filename
                 with open(save_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
-
-                # 1. Parse document
                 parse_result = parser.parse_file(save_path)
                 if not parse_result.get("success", False):
                     failed_files.append((filename, parse_result.get("error", "Unknown parse error")))
+                    completed_steps += 1
+                    percent = int(completed_steps / total_steps * 100)
+                    percent_text.text(f"진행률: {percent}%")
+                    progress_bar.progress(completed_steps / total_steps)
                     continue
 
-                # 2. Chunk document
+                completed_steps += 1
+                percent = int(completed_steps / total_steps * 100)
+                percent_text.text(f"진행률: {percent}%")
+                progress_bar.progress(completed_steps / total_steps)
+
+                                # Step 2: Chunking & Embedding (batch)
                 doc_text = parse_result.get("text", "")
                 metadata = parse_result.get("metadata", {})
                 chunks = chunker.chunk_document(doc_text, metadata)
-
-                # 3. Incremental add to persistent ChromaDB (appends, does not overwrite)
+                # 동일 파일 재업로드 시 기존 청크 삭제 후 최신 내용으로 갱신
+                vector_store.delete_document(filename)
                 status_text.text(f"[{idx+1}/{total_files}] 임베딩 생성 및 영구 저장 중: {filename} ({len(chunks)}개 청크)...")
-                added_count = vector_store.add_documents(chunks)
+                # Prepare texts for batch embedding
+                texts = [c["text"] for c in chunks]
+                try:
+                    embeddings = vector_store.embedding_provider.embed_documents(texts)
+                    added_count = vector_store.add_embeddings(embeddings, chunks)
+                except Exception as e:
+                    logger.error(f"Embedding/storage failed for {filename}: {e}")
+                    failed_files.append((filename, f"임베딩/저장 실패: {e}"))
+                    completed_steps += 1
+                    progress_bar.progress(completed_steps / total_steps)
+                    continue
                 total_added_chunks += added_count
                 success_files.append((filename, added_count))
 
-                progress_bar.progress((idx + 1) / total_files)
+                completed_steps += 1
+                percent = int(completed_steps / total_steps * 100)
+                percent_text.text(f"진행률: {percent}%")
+                progress_bar.progress(completed_steps / total_steps)
 
+            # Finalize UI
+            percent_text.text("진행률: 100%")
             status_text.empty()
             progress_bar.progress(1.0)
-
             st.success(f"총 {len(success_files)}개 문서에서 {total_added_chunks}개 청크가 벡터 DB에 성공적으로 저장되었습니다!")
 
             if success_files:
@@ -204,6 +223,7 @@ def main():
                 with st.expander("⚠️ 파싱 실패 문서 목록", expanded=True):
                     for fname, err in failed_files:
                         st.error(f"- **{fname}**: {err}")
+
 
     # ------------------ TAB 2: DB STATS & MANAGEMENT ------------------
     with tab_db:

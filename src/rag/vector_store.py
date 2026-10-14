@@ -1,8 +1,9 @@
-"""
+'''\
 Persistent ChromaDB Vector Store Manager.
 Maintains persistent on-disk vector database, supports incremental document additions,
 metadata filtering, statistics tracking, and document deletion.
-"""
+'''
+
 import uuid
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -11,6 +12,7 @@ from chromadb.config import Settings
 from src.config import config
 from src.rag.embeddings import get_embedding_provider
 from src.security.logger import get_secure_logger
+from chromadb.errors import NotFoundError, InvalidArgumentError
 
 logger = get_secure_logger("vector_store")
 
@@ -22,113 +24,240 @@ class PersistentVectorStore:
         self,
         persist_directory: Optional[Path] = None,
         collection_name: Optional[str] = None,
-        embedding_provider: Optional[Any] = None
+        embedding_provider: Optional[Any] = None,
     ):
         self.persist_directory = str(persist_directory or config.chroma_persist_dir)
         self.collection_name = collection_name or config.chroma_collection_name
         self.embedding_provider = embedding_provider or get_embedding_provider()
+        # Expected embedding dimension – may be inferred from provider or existing collection
+        self._expected_dimension: Optional[int] = getattr(self.embedding_provider, "dimension", None)
 
         logger.info(f"Connecting to ChromaDB at: {self.persist_directory}")
         self.client = chromadb.PersistentClient(
             path=self.persist_directory,
-            settings=Settings(anonymized_telemetry=False)
+            settings=Settings(anonymized_telemetry=False),
         )
         self.collection = self.client.get_or_create_collection(
             name=self.collection_name,
-            metadata={"hnsw:space": "cosine"}
+            metadata={"hnsw:space": "cosine"},
         )
+        # If collection already contains data, infer its dimension
+        if self.collection.count() > 0:
+            try:
+                first_emb = self.collection.get(limit=1, include=["embeddings"]).get("embeddings", [])[0]
+                self._expected_dimension = len(first_emb)
+                logger.info(f"Detected existing collection dimension: {self._expected_dimension}")
+            except Exception:
+                logger.warning("Unable to infer existing collection dimension; will rely on provider.")
+
+    # ---------------------------------------------------------------------
+    # Internal helpers
+    # ---------------------------------------------------------------------
+    def _collection_dimension(self) -> Optional[int]:
+        """Return embedding dimension of current collection if it has data."""
+        if self.collection.count() == 0:
+            return None
+        try:
+            emb = self.collection.get(limit=1, include=["embeddings"]).get("embeddings", [])[0]
+            return len(emb)
+        except Exception:
+            return None
+
+    def _ensure_correct_dimension(self) -> bool:
+        """Check that collection dimension matches the provider.
+
+        NEVER deletes or re-indexes data. (예전에는 불일치 시 컬렉션을 삭제하고
+        전체 재임베딩을 시도하여 문서가 사라지고 검색이 수 분간 멈추는 문제가 있었음.)
+        Returns True if compatible (or collection empty), False otherwise.
+        """
+        provider_dim = getattr(self.embedding_provider, "dimension", None)
+        collection_dim = self._collection_dimension()
+        if provider_dim is None or collection_dim is None:
+            self._expected_dimension = provider_dim or collection_dim
+            return True
+        if collection_dim != provider_dim:
+            logger.error(
+                f"Embedding dimension mismatch (collection={collection_dim}, provider={provider_dim}). "
+                "Data is preserved; re-upload documents with the current embedding model if needed."
+            )
+            return False
+        self._expected_dimension = provider_dim
+        return True
+
+    # ---------------------------------------------------------------------
+    # Public API
+    # ---------------------------------------------------------------------
+    @staticmethod
+    def _clean_metadatas(metadatas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        cleaned_list = []
+        for meta in metadatas:
+            cleaned_list.append({
+                k: (v if isinstance(v, (str, int, float, bool)) else str(v))
+                for k, v in (meta or {}).items()
+            })
+        return cleaned_list
 
     def add_documents(self, chunks: List[Dict[str, Any]]) -> int:
-        """
-        Incrementally appends chunked documents to the persistent collection.
-        Does NOT overwrite existing data; appends seamlessly.
-        """
+        """Append chunked documents (embeddings computed with the fixed local model)."""
         if not chunks:
             return 0
-
-        # Sanitize texts to ensure valid UTF-8 without stray surrogates
         texts = [c["text"].encode("utf-8", "ignore").decode("utf-8") for c in chunks]
-        metadatas = [c["metadata"] for c in chunks]
+        logger.info(f"Generating embeddings for {len(texts)} document chunks...")
+        embeddings = self.embedding_provider.embed_documents(texts)
+        return self.add_embeddings(embeddings, [{"text": t, "metadata": c["metadata"]} for t, c in zip(texts, chunks)])
 
-        # Generate unique deterministic/UUID IDs
+    def add_embeddings(self, embeddings: List[List[float]], chunks: List[Dict[str, Any]]) -> int:
+        """Add pre-computed embeddings. Existing data is never deleted."""
+        if not embeddings or not chunks:
+            return 0
+        if not self._ensure_correct_dimension():
+            raise ValueError(
+                f"벡터 DB의 임베딩 차원({self._collection_dimension()})과 현재 임베딩 모델 차원"
+                f"({self.embedding_provider.dimension})이 다릅니다. 기존 데이터는 보존되었습니다."
+            )
+        texts = [c["text"] for c in chunks]
+        metadatas = [c["metadata"] for c in chunks]
         ids = [
             f"{m.get('source', 'doc')}_{m.get('chunk_index', idx)}_{uuid.uuid4().hex[:8]}"
             for idx, m in enumerate(metadatas)
         ]
-
-        logger.info(f"Generating embeddings for {len(texts)} document chunks...")
-        embeddings = self.embedding_provider.embed_documents(texts)
-
-        # Chroma metadata requires values to be string, int, float, or bool
-        cleaned_metadatas = []
-        for meta in metadatas:
-            cleaned = {}
-            for k, v in meta.items():
-                if isinstance(v, (str, int, float, bool)):
-                    cleaned[k] = v
-                else:
-                    cleaned[k] = str(v)
-            cleaned_metadatas.append(cleaned)
-
         self.collection.add(
             ids=ids,
             embeddings=embeddings,
             documents=texts,
-            metadatas=cleaned_metadatas
+            metadatas=self._clean_metadatas(metadatas),
         )
-
-        logger.info(f"Successfully added {len(chunks)} chunks to collection '{self.collection_name}'.")
+        logger.info(f"Successfully batch added {len(chunks)} chunks.")
         return len(chunks)
 
     def search(self, query: str, top_k: int = 5, score_threshold: float = 0.0) -> List[Dict[str, Any]]:
-        """
-        Searches the collection for chunks relevant to the user query.
-        Returns sorted list of matching chunks with similarity scores.
-        """
+        """Search collection with query embedding; returns matched chunks."""
         if self.collection.count() == 0:
             logger.info("Search requested but collection is empty.")
             return []
+        if not self._ensure_correct_dimension():
+            return []
+        query_emb = self.embedding_provider.embed_query(query)
+        # 1. 시맨틱 벡터 검색 후보군 대폭 확대 (충분한 후보 풀 확보)
+        fetch_k = min(max(top_k * 10, 50), self.collection.count())
+        try:
+            results = self.collection.query(
+                query_embeddings=[query_emb],
+                n_results=fetch_k,
+                include=["documents", "metadatas", "distances"],
+            )
+        except InvalidArgumentError as e:
+            if "dimension" in str(e):
+                logger.warning(f"Embedding dimension mismatch during search ({e}). Returning empty results.")
+                return []
+            else:
+                raise
 
-        query_embedding = self.embedding_provider.embed_query(query)
-
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=min(top_k, self.collection.count()),
-            include=["documents", "metadatas", "distances"]
-        )
-
-        matched_items = []
         docs = results.get("documents", [[]])[0]
         metas = results.get("metadatas", [[]])[0]
         distances = results.get("distances", [[]])[0]
 
+        # 2. 고도화된 키워드 추출 (한글 조사 분리 및 불용어 정제)
+        import re
+        raw_tokens = re.findall(r'[a-zA-Z]{3,}|[가-힣]{2,}', query)
+        stopwords = {
+            "대해", "대한", "대하여", "설명해줘", "설명", "알려줘", "알려", "무엇인가", "무엇인지",
+            "관련", "관련된", "어떤", "있는", "내용", "정리해줘", "말해줘", "요약해줘", "특징",
+            "정보", "종류", "항목", "규정", "법령"
+        }
+        korean_particles = ["에서는", "에서", "에게", "으로", "로는", "이란", "라는", "은", "는", "이", "가", "을", "를", "의", "와", "과", "로", "도", "만", "에", "란"]
+
+        keywords = []
+        for t in raw_tokens:
+            t_lower = t.strip().lower()
+            if t_lower in stopwords:
+                continue
+            # 한글 조사 제거
+            cleaned = t_lower
+            for p in sorted(korean_particles, key=len, reverse=True):
+                if cleaned.endswith(p) and len(cleaned) - len(p) >= 2:
+                    cleaned = cleaned[:-len(p)]
+                    break
+            if cleaned not in stopwords and len(cleaned) >= 2 and cleaned not in keywords:
+                keywords.append(cleaned)
+
+        matched_dict = {}
+
+        # (A) 벡터 검색 결과 등록 및 키워드 가중치 부스팅
         for doc, meta, dist in zip(docs, metas, distances):
-            # For cosine distance: distance is 1 - cosine_similarity (range 0 to 2)
-            # Similarity = 1 - distance
-            similarity = max(0.0, 1.0 - dist)
-            if similarity >= score_threshold:
-                matched_items.append({
+            base_sim = max(0.0, 1.0 - dist)
+            doc_lower = doc.lower()
+            keyword_hits = sum(1 for kw in keywords if kw in doc_lower)
+
+            boost = 0.0
+            if keyword_hits > 0:
+                boost = min(0.40, keyword_hits * 0.15)
+                # 제목/엔티티 라인에 직접 키워드가 포함된 경우 추가 우선순위 부여
+                first_line = doc_lower.split('\n')[0]
+                if any(kw in first_line for kw in keywords):
+                    boost += 0.25
+
+            final_sim = min(1.0, base_sim + boost)
+            if final_sim >= score_threshold:
+                matched_dict[doc] = {
                     "text": doc,
                     "metadata": meta,
-                    "similarity": round(similarity, 4),
-                    "distance": round(dist, 4)
-                })
+                    "similarity": round(final_sim, 4),
+                    "distance": round(dist, 4),
+                }
 
-        # Sort descending by similarity
-        matched_items.sort(key=lambda x: x["similarity"], reverse=True)
-        return matched_items
+        # (B) 핵심 키워드 직접 컬렉션 검색 (True Hybrid: 무조건 병합)
+        # 질문 내 고유명사/학명 등 핵심 키워드가 포함된 청크를 무조건 발굴하여 후보에 합침
+        for kw in keywords[:4]:
+            try:
+                kw_results = self.collection.get(
+                    where_document={"$contains": kw},
+                    limit=max(top_k * 2, 10),
+                    include=["documents", "metadatas"]
+                )
+                kw_docs = kw_results.get("documents", [])
+                kw_metas = kw_results.get("metadatas", [])
+                for kd, km in zip(kw_docs, kw_metas):
+                    kd_lower = kd.lower()
+                    hits = sum(1 for k in keywords if k in kd_lower)
+                    first_line = kd_lower.split('\n')[0]
+                    title_match = any(k in first_line for k in keywords)
+
+                    # 키워드 직접 일치 점수 산정 (최소 0.88, 복수 일치/제목 일치 시 0.95+)
+                    kw_sim = 0.88 + min(0.08, hits * 0.03) + (0.04 if title_match else 0.0)
+                    kw_sim = min(1.0, kw_sim)
+
+                    if kd in matched_dict:
+                        matched_dict[kd]["similarity"] = max(matched_dict[kd]["similarity"], round(kw_sim, 4))
+                    else:
+                        matched_dict[kd] = {
+                            "text": kd,
+                            "metadata": km,
+                            "similarity": round(kw_sim, 4),
+                            "distance": round(1.0 - kw_sim, 4),
+                        }
+            except Exception as kw_e:
+                logger.debug(f"Keyword search notice for '{kw}': {kw_e}")
+
+        matched = list(matched_dict.values())
+        matched.sort(key=lambda x: x["similarity"], reverse=True)
+        return matched[:top_k]
 
     def get_stats(self) -> Dict[str, Any]:
-        """Returns collection summary statistics."""
-        count = self.collection.count()
+        """Return summary statistics of the collection."""
+        try:
+            count = self.collection.count()
+        except NotFoundError:
+            logger.warning(f"Collection '{self.collection_name}' not found. Recreating.")
+            self.reset_collection()
+            count = 0
         if count == 0:
             return {
                 "total_chunks": 0,
                 "unique_documents_count": 0,
-                "document_sources": []
+                "document_sources": [],
+                "source_chunk_counts": {},
             }
-
-        # Retrieve all metadatas to aggregate distinct document sources
         all_meta = self.collection.get(include=["metadatas"]).get("metadatas", [])
         sources = set()
         source_counts: Dict[str, int] = {}
@@ -136,29 +265,30 @@ class PersistentVectorStore:
             src = m.get("source", "Unknown")
             sources.add(src)
             source_counts[src] = source_counts.get(src, 0) + 1
-
         return {
             "total_chunks": count,
             "unique_documents_count": len(sources),
             "document_sources": sorted(list(sources)),
-            "source_chunk_counts": source_counts
+            "source_chunk_counts": source_counts,
         }
 
     def delete_document(self, source_filename: str) -> int:
-        """Deletes all chunks belonging to a specific source file."""
+        """Delete all chunks belonging to a specific source file."""
         logger.info(f"Deleting all chunks for document source: {source_filename}")
-        initial_count = self.collection.count()
+        initial = self.collection.count()
         self.collection.delete(where={"source": source_filename})
-        new_count = self.collection.count()
-        deleted = initial_count - new_count
+        new = self.collection.count()
+        deleted = initial - new
         logger.info(f"Deleted {deleted} chunks for '{source_filename}'.")
         return deleted
 
     def reset_collection(self):
-        """Clears all records in the collection."""
+        """Completely drop and recreate the collection, clearing stored dimension cache."""
         logger.warning(f"Resetting vector store collection '{self.collection_name}'...")
         self.client.delete_collection(self.collection_name)
         self.collection = self.client.get_or_create_collection(
             name=self.collection_name,
-            metadata={"hnsw:space": "cosine"}
+            metadata={"hnsw:space": "cosine"},
         )
+        self._expected_dimension = getattr(self.embedding_provider, "dimension", None)
+

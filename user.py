@@ -1,265 +1,648 @@
 """
 ==============================================================================
-User Conversational RAG Application (user.py)
+Biosafety RAG System - User Interface & Unified CLI Entrypoint (user.py)
 ------------------------------------------------------------------------------
-사용자 전용 지식 기반 대화형 질의응답 시스템.
-독립적으로 실행 가능: streamlit run user.py
-
-기능:
-1. 사용자 자연어 질문 입력 -> 영구 벡터 DB(ChromaDB)에서 관련 컨텍스트 검색.
-2. 로컬 Ollama LLM(EXAONE 3.5 / Qwen 2.5)을 통한 고성능 한국어 지식 기반 답변 생성.
-3. 실시간 토큰 스트리밍(Streaming) 출력으로 즉각적인 피드백 제공.
-4. 멀티턴 대화형 RAG: 이전 대화 기억 및 문맥 기반 후속 질의 재구성.
-5. 참고 출처(Citations) 및 발췌 문맥 투명한 제공.
+Provides dual-mode operation:
+1. Powerful CLI for document ingestion, deduplication, OCR check, and Gemini inspection:
+   - python user.py --input data/input/document.pdf
+   - python user.py --input data/input --recursive
+   - python user.py --input data/input/document.pdf --force
+   - python user.py --check-ocr
+   - python user.py --check-gemini
+   - python user.py --list-models
+2. Interactive Streamlit Conversational Web UI:
+   - streamlit run user.py
 ==============================================================================
 """
-from typing import List, Dict, Any
-import streamlit as st
+import sys
+import os
+import argparse
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+import json
 
-from src.config import config
-from src.rag.vector_store import PersistentVectorStore
-from src.rag.engine import ConversationalRAGEngine
-from src.rag.ollama_client import OllamaClient
-from src.security.logger import get_secure_logger
+# Ensure UTF-8 output on Windows console
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
-logger = get_secure_logger("user_app")
-
-# Streamlit Page Settings (Safe for both standalone and imported execution)
 try:
-    st.set_page_config(
-        page_title="RAG Vibe - 사용자 지식 대화 시스템 (User Chat)",
-        page_icon="💬",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
+    import truststore
+    truststore.inject_into_ssl()
 except Exception:
     pass
 
-# Custom Styling
-st.markdown(
-    """
-    <style>
-    .user-header {
-        font-size: 2.1rem;
-        font-weight: 700;
-        color: #1E3A8A;
-        margin-bottom: 0.2rem;
-    }
-    .user-desc {
-        color: #4B5563;
-        font-size: 1.0rem;
-        margin-bottom: 1.5rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Ensure project root is on sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from config import config
+from src.rag.openai_client import OpenAIClient
 
 
-@st.cache_resource(show_spinner="로컬 AI 엔진 및 벡터 데이터베이스 초기화 중...")
-def initialize_user_rag():
-    """Initializes and caches vector store and conversational engine."""
-    vector_store = PersistentVectorStore()
-    rag_engine = ConversationalRAGEngine(vector_store=vector_store)
-    return vector_store, rag_engine
-
-
-def main():
-    st.markdown('<div class="user-header">💬 RAG Vibe - 지식 기반 대화형 AI</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="user-desc">업로드된 사내/개인 문서를 바탕으로 AI가 정확한 답변을 실시간 스트리밍으로 제공합니다. (Google Gemini 및 로컬 Ollama 지원)</div>',
-        unsafe_allow_html=True
+def run_check_ocr():
+    """Validates OCR installation and environment configuration."""
+    from parsers.ocr_parser import (
+        HAS_RAPIDOCR,
+        HAS_PYTESSERACT,
+        get_tesseract_executable
     )
-
-    vector_store, rag_engine = initialize_user_rag()
-    ollama_client = OllamaClient(base_url=config.ollama_base_url)
-
-    # 1. Sidebar Configuration & Status
-    with st.sidebar:
-        st.subheader("🤖 AI 모델 및 엔진 설정")
-        
-        provider_option = st.radio(
-            "사용할 LLM 제공자 선택:",
-            options=["✨ Google Gemini (추천: 설치 불필요/초고속)", "🦙 로컬 Ollama (오프라인 로컬 실행)"],
-            index=0 if config.llm_provider == "gemini" else 1,
-            help="Google Gemini를 선택하면 별도의 로컬 Ollama 설치 없이 다수의 사용자가 즉시 쾌적하게 이용할 수 있습니다."
-        )
-
-        use_gemini = "Gemini" in provider_option
-        rag_engine.llm_provider = "gemini" if use_gemini else "ollama"
-
-        if use_gemini:
-            st.caption("🚀 **클라우드 API 모드**: 별도의 로컬 서버 설치 없이 안정적인 스트리밍을 제공합니다.")
-            
-            # API Key Configuration
-            current_key = st.session_state.get("user_gemini_api_key", config.gemini_api_key)
-            api_key_input = st.text_input(
-                "🔑 Gemini API 키:",
-                value=current_key if current_key else "",
-                type="password",
-                help=".env에 GEMINI_API_KEY를 설정하거나 여기에 직접 입력하세요. (aistudio.google.com 무료 발급)"
-            )
-            if api_key_input:
-                st.session_state.user_gemini_api_key = api_key_input
-                rag_engine.gemini_api_key = api_key_input
-                st.success("API 키가 적용되었습니다.", icon="✅")
+    print("=" * 70)
+    print("🔍 [1/2] RapidOCR Engine Check")
+    print("=" * 70)
+    if HAS_RAPIDOCR:
+        print("✅ RapidOCR (ONNX Runtime): INSTALLED & READY")
+        try:
+            from parsers.ocr_parser import _get_rapidocr_instance
+            engine = _get_rapidocr_instance()
+            if engine:
+                print("   - Engine initialized successfully with Korean/Multilingual model.")
             else:
-                rag_engine.gemini_api_key = ""
-                st.warning("Gemini API 키가 필요합니다. [무료 발급받기](https://aistudio.google.com/app/apikey)")
+                print("   ⚠️ Engine loaded but instance returned None.")
+        except Exception as e:
+            print(f"   ⚠️ RapidOCR check warning: {e}")
+    else:
+        print("❌ RapidOCR: NOT INSTALLED")
+        print("   설치 명령: pip install rapidocr onnxruntime")
 
-            gemini_model_options = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3-flash"]
-            default_idx = gemini_model_options.index(config.gemini_model) if config.gemini_model in gemini_model_options else 0
-            selected_gemini_model = st.selectbox(
-                "Gemini 모델 선택:",
-                options=gemini_model_options,
-                index=default_idx
-            )
-            rag_engine.gemini_model = selected_gemini_model
-
-        else:
-            st.caption("💻 **로컬 Ollama 모드**: 로컬 하드웨어에서 100% 오프라인으로 실행됩니다.")
-            ollama_status = ollama_client.check_connection()
-            if ollama_status["connected"]:
-                st.success(f"Ollama 연결됨 (`{config.ollama_base_url}`)")
-                installed_models = ollama_status["models"]
-
-                if installed_models:
-                    selected_model = st.selectbox(
-                        "사용할 Ollama 모델 선택:",
-                        options=installed_models,
-                        index=installed_models.index(config.ollama_llm_model) if config.ollama_llm_model in installed_models else 0
-                    )
-                    rag_engine.ollama_model = selected_model
-                else:
-                    st.info(f"설치된 모델 없음. 기본 모델: `{config.ollama_llm_model}`")
+    print("\n" + "=" * 70)
+    print("🔍 [2/2] Tesseract OCR Engine Check")
+    print("=" * 70)
+    tess_path = get_tesseract_executable()
+    if HAS_PYTESSERACT and tess_path:
+        print("✅ Tesseract OCR: INSTALLED & FOUND")
+        print(f"   - Executable: {tess_path}")
+        try:
+            import pytesseract
+            pytesseract.pytesseract.tesseract_cmd = tess_path
+            langs = pytesseract.get_languages()
+            print(f"   - Installed Languages: {', '.join(langs)}")
+            if "kor" in langs:
+                print("   ✅ Korean language data (kor.traineddata): DETECTED")
             else:
-                st.error(f"Ollama 미연결 (`{config.ollama_base_url}`)")
-                st.caption("터미널에서 `ollama serve`를 실행하거나, 상단에서 **Google Gemini** 모드를 선택해주세요.")
+                print("   ⚠️ Korean language data (kor.traineddata) is MISSING!")
+                print("      Tessdata 다운로드: https://github.com/tesseract-ocr/tessdata")
+        except Exception as e:
+            print(f"   ⚠️ Could not query Tesseract languages: {e}")
+    else:
+        print("❌ Tesseract OCR: NOT FOUND OR NOT CONFIGURED")
+        if not HAS_PYTESSERACT:
+            print("   - pytesseract package is missing: pip install pytesseract")
+        print("\n   [Windows 설치 안내]:")
+        print("   1. Chocolatey 사용 시:")
+        print("      choco install tesseract")
+        print("   2. 수동 설치:")
+        print("      UB-Mannheim 인스톨러 다운로드 (한국어 언어팩 체크):")
+        print("      https://github.com/UB-Mannheim/tesseract/wiki")
+        print("   3. .env 파일에 실행 경로 지정 (선택):")
+        print(r"      TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe")
+    print("=" * 70)
 
-        st.divider()
-        st.subheader("⚙️ 검색 파라미터")
-        top_k = st.slider("참고할 청크 수 (Top-K)", min_value=1, max_value=10, value=4, step=1)
-        score_threshold = st.slider(
-            "최소 유사도 기준 (Threshold)", min_value=0.0, max_value=0.9, value=0.1, step=0.05,
-            help="유사도가 이 값 이상인 문서 청크만 답변 컨텍스트로 활용합니다."
+
+def run_check_gemini():
+    """Validates Google Gemini API key and model connectivity."""
+    from src.rag.gemini_client import GeminiModelResolver, classify_gemini_error
+    print("=" * 70)
+    print("🔑 Google Gemini API Connectivity Check")
+    print("=" * 70)
+    api_key = config.gemini_api_key
+    if not api_key:
+        print("❌ GEMINI_API_KEY is NOT CONFIGURED.")
+        print("   .env 파일에 GEMINI_API_KEY=your_key_here 를 설정하거나 환경변수를 등록하세요.")
+        print("   무료 키 발급: https://aistudio.google.com/app/apikey")
+        return
+
+    masked_key = f"{api_key[:6]}...{api_key[-4:]}" if len(api_key) > 10 else "********"
+    print(f"   - API Key Configured: {masked_key}")
+    print(f"   - Configured Target Model: {config.gemini_model}")
+
+    resolver = GeminiModelResolver(api_key=api_key)
+    try:
+        resolved, warn = resolver.resolve_model(config.gemini_model)
+        if warn:
+            print(f"   ⚠️ Model Resolution Notice: {warn}")
+        print(f"   ✅ Active Target Model: {resolved}")
+
+        # Quick test generation call
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        resp = client.models.generate_content(
+            model=resolved,
+            contents="Say 'OK' if you receive this message."
         )
+        print("   ✅ Live API Call Success! Model Response: " + (resp.text or "").strip()[:50])
+    except Exception as e:
+        diag = classify_gemini_error(e)
+        print(f"   ❌ Connection Check Failed! Error Type: {diag['error_type']}")
+        print(f"   {diag['user_message']}")
+        print(f"   Detailed: {str(e)}")
+    print("=" * 70)
 
-        st.divider()
-        if st.button("🗑️ 대화 기록 초기화", use_container_width=True):
-            st.session_state.user_messages = []
-            st.rerun()
 
-        st.divider()
-        st.subheader("📚 현재 등록된 문서 목록")
-        stats = vector_store.get_stats()
-        sources = stats.get("document_sources", [])
-        if sources:
-            for s in sources:
-                st.markdown(f"- 📄 `{s}`")
+def run_list_models():
+    """Lists available Gemini models and shows support for generateContent."""
+    from src.rag.gemini_client import GeminiModelResolver
+    print("=" * 70)
+    print("📋 Google Gemini Available Models List")
+    print("=" * 70)
+    api_key = config.gemini_api_key
+    if not api_key:
+        print("❌ GEMINI_API_KEY is required to list available models.")
+        print("   .env 파일에 GEMINI_API_KEY를 등록해주세요.")
+        return
+
+    resolver = GeminiModelResolver(api_key=api_key)
+    models = resolver.list_available_models()
+
+    if not models:
+        print("⚠️ Could not retrieve model list or no models returned.")
+        return
+
+    header = f"{'Model Name':<35} | {'generateContent':<16} | {'Display Name'}"
+    print(header)
+    print("-" * len(header))
+    for m in models:
+        gen_status = "✅ YES" if m["supports_generate_content"] else "❌ NO"
+        print(f"{m['short_name']:<35} | {gen_status:<16} | {m['display_name']}")
+    print("=" * 70)
+
+
+def run_ingestion(input_path_str: str, recursive: bool = False, force: bool = False):
+    """Executes ingestion pipeline via CLI."""
+    from pipeline.deduplication import ingest_document, ingest_directory
+    from vectorstore.store import VectorStore
+    input_path = Path(input_path_str)
+    if not input_path.exists():
+        print(f"❌ Input path does not exist: {input_path}")
+        sys.exit(1)
+
+    vstore = VectorStore()
+    print("=" * 70)
+    print(f"🚀 Starting Ingestion Pipeline: {input_path}")
+    print(f"   - Force overwrite: {force}")
+    print(f"   - Recursive scan: {recursive}")
+    print(f"   - Target ChromaDB: {config.chroma_persist_dir}")
+    print("=" * 70)
+
+    if input_path.is_file():
+        res = ingest_document(input_path, force=force, vector_store=vstore)
+        results = [res]
+    else:
+        results = ingest_directory(input_path, recursive=recursive, force=force, vector_store=vstore)
+
+    print("\n" + "=" * 70)
+    print("📊 Ingestion Summary Report")
+    print("=" * 70)
+    total_success = 0
+    total_skipped = 0
+    total_failed = 0
+    total_chunks = 0
+
+    for r in results:
+        status_symbol = "✅" if r["status"] == "success" else ("⏭️" if r["status"] == "skipped" else "❌")
+        print(
+            f"{status_symbol} [{r['status'].upper():<7}] {r['source']} | "
+            f"Pages: {r['pages']} (OCR: {r['ocr_pages']}) | Chunks: {r['chunks']}"
+        )
+        if r.get("warnings"):
+            for w in r["warnings"]:
+                print(f"   ⚠️ Warning: {w}")
+        if r["status"] == "success":
+            total_success += 1
+            total_chunks += r["chunks"]
+        elif r["status"] == "skipped":
+            total_skipped += 1
         else:
-            st.info("등록된 문서가 없습니다. `admin.py`에서 먼저 문서를 업로드해주세요.")
+            total_failed += 1
 
-    # 2. Initialize chat history
-    if "user_messages" not in st.session_state:
-        st.session_state.user_messages = [
+    print("-" * 70)
+    print(f"Total Processed: {len(results)} | Success: {total_success} | Skipped: {total_skipped} | Failed: {total_failed}")
+    print(f"Total New Chunks Stored: {total_chunks}")
+    stats = vstore.get_stats()
+    print(f"Total Collection Chunks Now: {stats['total_chunks']} ({stats['unique_documents_count']} documents)")
+    print("=" * 70)
+
+
+def run_streamlit_app():
+    """Runs Streamlit Conversational Web UI."""
+    import streamlit as st
+    import traceback
+    # Compatibility fallbacks for newer Streamlit APIs
+    if not hasattr(st, "chat_message"):
+        class _DummyChat:
+            def __enter__(self):
+                return st.container()
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+        st.chat_message = lambda role: _DummyChat()
+    if not hasattr(st, "status"):
+        class _DummyStatus:
+            def __init__(self, label="", expanded=False):
+                self.label = label
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+            def update(self, label=None, state=None, expanded=False):
+                if label is not None:
+                    st.write(label)
+        st.status = lambda label="", expanded=False: _DummyStatus(label=label)
+
+
+
+# Set page config before any other Streamlit calls
+    try:
+        st.set_page_config(
+            page_title="RAG Vibe - 생물안전 및 독소 지식 대화 시스템",
+            page_icon="💬",
+            layout="wide",
+            initial_sidebar_state="expanded",
+        )
+    except Exception as e:
+        st.error(f"📛 페이지 설정 오류: {e}")
+        st.stop()
+    # Optional debug/info message
+    st.write('🔧 UI 초기화 중...')
+    # Import core modules with error handling
+    try:
+        from src.rag.vector_store import PersistentVectorStore
+        from src.rag.engine import ConversationalRAGEngine
+        st.write('✅ VectorStore, Engine 모듈 로드 성공')
+    except Exception as e:
+        st.error('❌ 필수 모듈 로드 실패')
+        st.error(traceback.format_exc())
+        st.stop()
+    # Initialize sessions store directory
+    sessions_dir = Path(__file__).resolve().parent / "data" / "chat_sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+
+    def _save_session(session_id: str, messages: list):
+        if not session_id or not messages:
+            return
+        # Only save if there is at least one actual user message (prevents empty ghost sessions)
+        user_msgs = [m for m in messages if m.get("role") == "user"]
+        if not user_msgs:
+            return
+        filepath = sessions_dir / f"{session_id}.json"
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(messages, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def _delete_session(session_id: str):
+        filepath = sessions_dir / f"{session_id}.json"
+        if filepath.is_file():
+            try:
+                filepath.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def _list_sessions():
+        import datetime
+        files = list(sessions_dir.glob("*.json"))
+        # Sort by file modification time desc
+        files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        session_list = []
+        for file in files:
+            try:
+                with open(file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list) and data:
+                    title = "새로운 대화"
+                    for m in data:
+                        if m.get("role") == "user":
+                            title = m.get("content", "").strip()[:24]
+                            break
+                    mtime_dt = datetime.datetime.fromtimestamp(file.stat().st_mtime)
+                    time_label = mtime_dt.strftime("%m/%d %H:%M")
+                    session_list.append({
+                        "id": file.stem,
+                        "title": title,
+                        "time_label": time_label,
+                        "file": file,
+                        "messages": data
+                    })
+            except Exception:
+                pass
+        return session_list
+
+    # Default greeting message helper
+    def _default_messages():
+        return [
             {
                 "role": "assistant",
-                "content": "안녕하세요! 등록된 문서를 기반으로 질문에 명확하고 상세하게 답변해 드립니다. 무엇이든 질문해 보세요.",
-                "sources": []
+                "content": "안녕하세요! 생물작용제 및 독소 안전관리 지식 어시스턴트입니다. 규정, 신고 절차, 보관 시설 기준 등에 관해 궁금한 점을 질문해 주세요."
             }
         ]
 
-    # 3. Render conversation history
+    # Initialize current session if not set
+    if "current_session_id" not in st.session_state or "user_messages" not in st.session_state:
+        existing = _list_sessions()
+        if existing:
+            # Load the most recent session directly so continuing conversation stays in this session!
+            st.session_state.current_session_id = existing[0]["id"]
+            st.session_state.user_messages = existing[0]["messages"]
+        else:
+            import datetime
+            st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            st.session_state.user_messages = _default_messages()
+
+    # Initialize vector store and RAG engine with error handling
+    @st.cache_resource(show_spinner="벡터 데이터베이스 및 임베딩 모델 로딩 중...")
+    def _get_vector_store():
+        return PersistentVectorStore()
+
+    try:
+        vector_store = _get_vector_store()
+        rag_engine = ConversationalRAGEngine(vector_store=vector_store)
+    except Exception as e:
+        st.error('❌ 벡터스토어 또는 엔진 초기화 실패')
+        st.error(traceback.format_exc())
+        st.stop()
+
+    # ------------------ [SIDEBAR : LEFT PANEL] ------------------
+    with st.sidebar:
+        st.markdown("### 💬 대화 관리")
+        
+        # '새채팅' 버튼
+        if st.button("➕ 새채팅 시작", type="primary", use_container_width=True):
+            # Save current session before reset if it has conversation
+            _save_session(st.session_state.current_session_id, st.session_state.user_messages)
+            import datetime
+            st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            st.session_state.user_messages = _default_messages()
+            st.rerun()
+
+        st.divider()
+
+        # LLM 모델 및 옵션 설정
+        st.markdown("### ⚙️ 모델 및 검색 설정")
+        provider_option = st.radio(
+            "사용할 LLM 제공자:",
+            options=[
+                "✨ Google Gemini (추천)",
+                "🟢 OpenAI (ChatGPT)"
+            ],
+            index=0 if config.llm_provider == "gemini" else 1
+        )
+        if "Gemini" in provider_option:
+            rag_engine.llm_provider = "gemini"
+            api_key_input = st.text_input(
+                "🔑 Gemini API 키:",
+                value=config.gemini_api_key or "",
+                type="password",
+                help=".env에 GEMINI_API_KEY를 설정하거나 여기에 직접 입력하세요."
+            )
+            if api_key_input:
+                rag_engine.gemini_api_key = api_key_input
+                rag_engine.gemini_model_resolver.api_key = api_key_input
+            st.caption(f"🎯 모델: `{rag_engine.gemini_model}`")
+        else:
+            rag_engine.llm_provider = "openai"
+            api_key_input = st.text_input(
+                "🔑 OpenAI API 키:",
+                value=config.openai_api_key or "",
+                type="password",
+                help=".env에 OPENAI_API_KEY를 설정하거나 여기에 직접 입력하세요."
+            )
+            if api_key_input:
+                rag_engine.openai_api_key = api_key_input
+                rag_engine.openai_client = OpenAIClient(api_key=api_key_input, model=rag_engine.openai_model)
+            st.caption(f"🟢 모델: `{rag_engine.openai_model}`")
+
+        top_k = st.slider("검색 청크 수 (Top‑K)", min_value=1, max_value=10, value=5, step=1)
+
+        st.divider()
+        stats = vector_store.get_stats()
+        st.markdown("### 📊 지식 베이스 현황")
+        st.metric("총 색인 청크 수", f"{stats['total_chunks']:,} 개")
+        st.metric("저장된 문서 수", f"{stats['unique_documents_count']} 권")
+
+        st.divider()
+
+        # 사이드바 하단: 저장된 이전 대화 목록
+        st.markdown("### 📂 저장된 이전 대화")
+        saved_sessions = _list_sessions()
+        if not saved_sessions:
+            st.caption("저장된 이전 대화가 없습니다.")
+        else:
+            for s in saved_sessions:
+                col_btn, col_del = st.columns([8, 2])
+                with col_btn:
+                    is_current = (s["id"] == st.session_state.current_session_id)
+                    time_suffix = f" ({s['time_label']})" if s.get("time_label") else ""
+                    btn_label = f"{'👉 ' if is_current else '📝 '}{s['title']}{time_suffix}"
+                    if st.button(btn_label, key=f"sess_{s['id']}", use_container_width=True):
+                        if not is_current:
+                            # Save current session before switching if it has user messages
+                            _save_session(st.session_state.current_session_id, st.session_state.user_messages)
+                            st.session_state.current_session_id = s["id"]
+                            try:
+                                with open(s["file"], "r", encoding="utf-8") as sf:
+                                    st.session_state.user_messages = json.load(sf)
+                            except Exception:
+                                st.session_state.user_messages = s["messages"]
+                            st.rerun()
+                with col_del:
+                    if st.button("🗑️", key=f"del_{s['id']}", help="대화 삭제"):
+                        _delete_session(s["id"])
+                        if s["id"] == st.session_state.current_session_id:
+                            remaining = [item for item in _list_sessions() if item["id"] != s["id"]]
+                            if remaining:
+                                st.session_state.current_session_id = remaining[0]["id"]
+                                st.session_state.user_messages = remaining[0]["messages"]
+                            else:
+                                import datetime
+                                st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                                st.session_state.user_messages = _default_messages()
+                        st.toast("대화가 완전히 삭제되었습니다.", icon="🗑️")
+                        st.rerun()
+
+    # ------------------ [MAIN WINDOW : RIGHT PANEL] ------------------
+    st.markdown(
+        """
+        <style>
+        .user-header { font-size: 2.1rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.2rem; }
+        .user-desc { color: #4B5563; font-size: 1.0rem; margin-bottom: 1.5rem; }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown('<div class="user-header">💬 생물작용제 및 독소 안전관리 RAG 지식 대화</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="user-desc">업로드 및 파싱된 생물안전 문서, 법령, 고시, 지침을 바탕으로 정확하고 신뢰할 수 있는 답변을 제공합니다.</div>',
+        unsafe_allow_html=True
+    )
+
+    # Display conversation messages in main container
     for msg in st.session_state.user_messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
             if msg.get("sources"):
-                with st.expander("🔍 참고 출처 및 컨텍스트 (Sources & Citations)", expanded=False):
+                with st.expander("🔍 참고 출처 및 컨텍스트", expanded=False):
                     for idx, src in enumerate(msg["sources"]):
-                        st.markdown(
-                            f"**[{idx+1}] {src['metadata'].get('source', '문서')}** "
-                            f"(유사도: `{src.get('similarity', 0.0):.2f}`)"
-                        )
-                        st.text(src["text"])
+                        st.markdown(f"**[{idx+1}] {src['metadata'].get('source', '문서')}** (유사도: `{src.get('similarity', 0.0):.2f}`)")
+                        st.text(src["text"][:400] + "...")
 
-    # 4. Handle user input
-    if prompt := st.chat_input("문서에 대해 질문하세요... (예: 생물작용제 및 독소 신고 제도의 제출처를 알려줘)"):
-        # Append user message
+    # Chat input box
+    if prompt := st.chat_input("생물작용제 및 독소 관련 질문을 입력하세요..."):
         st.session_state.user_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Generate assistant response with visual indicators
         with st.chat_message("assistant"):
-            # Step-by-step progress visual indicator
-            status_box = st.status("💡 답변 생성 프로세스를 시작합니다...", expanded=True)
+            status_box = st.status("🔍 관련 문서 검색 중...", expanded=True)
             response_placeholder = st.empty()
-            sources_container = st.container()
-
-            # Pass history (excluding current user query) for contextualization
-            history_for_engine = [
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.user_messages[:-1]
-            ]
-
             full_response = ""
-            retrieved_sources: List[Dict[str, Any]] = []
+            retrieved_sources = []
+            has_error = False
 
-            # Stream response from RAG engine
+            # 기본 스트리밍 생성기 호출
             stream_gen = rag_engine.generate_streaming_response(
                 query=prompt,
-                chat_history=history_for_engine,
+                chat_history=st.session_state.user_messages[:-1],
                 top_k=top_k,
-                score_threshold=score_threshold
             )
-
             for event in stream_gen:
                 event_type = event.get("type")
                 if event_type == "status":
-                    stage = event.get("stage")
-                    msg = event.get("message")
-                    if stage == "searching":
-                        status_box.update(label=f"🔍 {msg}", state="running")
-                    elif stage == "generating":
-                        status_box.update(label=f"🧠 {msg}", state="running")
-                    elif stage == "streaming":
-                        status_box.update(label="✍️ 실시간 답변 스트리밍 중...", state="running")
-                    elif stage == "done":
-                        status_box.update(label="✅ 답변 생성 완료", state="complete", expanded=False)
+                    status_box.update(label=f"⏳ {event.get('message')}", state="running")
                 elif event_type == "sources":
                     retrieved_sources = event.get("content", [])
-                    if retrieved_sources:
-                        status_box.write(f"📖 **{len(retrieved_sources)}개**의 관련 문서 청크를 찾았습니다.")
-                    else:
-                        status_box.write("⚠️ 관련 문서를 찾지 못했습니다.")
                 elif event_type == "token":
-                    full_response += event.get("content", "")
+                    token = event.get("content") or ""
+                    full_response += token
                     response_placeholder.markdown(full_response + " ▌")
                 elif event_type == "error":
-                    full_response += f"\n\n⚠️ {event.get('content')}"
+                    err_msg = event.get('content', '')
+                    status_box.update(label=f"⚠️ 오류 발생: {err_msg}", state="error", expanded=True)
+                    full_response += f"\n\n{err_msg}"
                     response_placeholder.markdown(full_response)
-                    status_box.update(label="⚠️ 오류가 발생했습니다.", state="error", expanded=True)
+                    has_error = True
+                    break
 
-            # Final clean render without cursor
+            if not has_error and not full_response.strip():
+                status_box.update(label="⚠️ 답변이 비어 있습니다. 선택한 모델에서 결과를 생성하지 못했습니다.", state="error", expanded=True)
+                full_response = "⚠️ 답변이 비어 있습니다. 모델이 해당 질문에 대한 응답을 생성하지 못했을 수 있습니다. 질문을 다르게 표현하거나 문서가 충분히 관련되어 있는지 확인해 주세요."
+
+            if not has_error:
+                status_box.update(label="✅ 답변 생성 완료", state="complete", expanded=False)
             response_placeholder.markdown(full_response)
 
-            # Display citations expander if sources were retrieved
-            if retrieved_sources:
-                with sources_container.expander("🔍 참고 출처 및 컨텍스트 (Sources & Citations)", expanded=False):
+            if not has_error and retrieved_sources:
+                with st.expander("🔍 참고 문서 청크", expanded=False):
                     for idx, src in enumerate(retrieved_sources):
-                        st.markdown(
-                            f"**[{idx+1}] {src['metadata'].get('source', '문서')}** "
-                            f"(유사도: `{src.get('similarity', 0.0):.2f}`)"
-                        )
-                        st.text(src["text"])
+                        st.markdown(f"**[{idx+1}] {src['metadata'].get('source', '문서')}** (유사도: `{src.get('similarity',0.0):.2f}`)")
+                        st.text(src['text'][:400] + "...")
 
-            # Store to history
             st.session_state.user_messages.append({
                 "role": "assistant",
                 "content": full_response,
-                "sources": retrieved_sources
+                "sources": retrieved_sources,
             })
+
+            # Save to current session file
+            _save_session(st.session_state.current_session_id, st.session_state.user_messages)
+            
+
+
+
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Biosafety RAG Pipeline CLI & Conversational Assistant",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+예시:
+  python user.py --input data/input/document.pdf
+  python user.py --input data/input --recursive
+  python user.py --input data/input/document.pdf --force
+  python user.py --check-ocr
+  python user.py --check-gemini
+  python user.py --list-models
+  python user.py --ui (또는 streamlit run user.py)
+        """
+    )
+    parser.add_argument(
+        "--input",
+        type=str,
+        help="수집 및 임베딩할 단일 문서 파일 경로 또는 디렉토리 경로"
+    )
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="디렉토리 입력 시 하위 디렉토리까지 재귀적으로 탐색하여 문서를 수집합니다."
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="이미 벡터 DB에 존재하는 동일 문서(해시 일치)라도 강제로 이전 데이터를 삭제하고 다시 파싱·수집합니다."
+    )
+    parser.add_argument(
+        "--check-ocr",
+        action="store_true",
+        help="RapidOCR 및 Tesseract OCR 엔진의 설치 상태, 실행 파일 경로, 언어 데이터(kor)를 점검합니다."
+    )
+    parser.add_argument(
+        "--check-gemini",
+        action="store_true",
+        help="Google Gemini API 연결 상태, API 키 유효성, 추천 모델 통신 여부를 점검합니다."
+    )
+    parser.add_argument(
+        "--list-models",
+        action="store_true",
+        help="Google Gemini API에서 현재 사용 가능한 모델 목록과 generateContent 지원 여부를 조회합니다."
+    )
+    parser.add_argument(
+        "--ui",
+        action="store_true",
+        help="Streamlit 대화형 웹 UI를 실행합니다."
+    )
+    # OpenAI API 키를 직접 지정합니다.
+    parser.add_argument(
+        "--openai-key",
+        type=str,
+        help="OpenAI API 키를 직접 지정합니다. .env에 설정되지 않은 경우 사용합니다."
+    )
+
+# NOTE: The Streamlit UI is now launched explicitly via the CLI `--ui` flag or
+# by running `streamlit run admin.py`. The automatic detection of a Streamlit
+# runtime caused `user.py` to start its UI when imported (e.g., when admin.py
+# imports the project package). This block is removed to prevent the user UI
+# from appearing unexpectedly.
+# The `main()` function below still supports the `--ui` argument for direct
+# execution.
+# is_streamlit_runtime = False  # Legacy auto‑run logic disabled
+
+    args, _ = parser.parse_known_args()
+
+    # Determine which mode to run based on provided arguments.
+    if args.check_ocr:
+        run_check_ocr()
+    elif args.check_gemini:
+        run_check_gemini()
+    elif args.list_models:
+        run_list_models()
+    elif args.input:
+        run_ingestion(args.input, recursive=args.recursive, force=args.force)
+    elif args.ui:
+        # Explicit UI flag – delegate to Streamlit runtime.
+        import subprocess
+        subprocess.run(["streamlit", "run", "user.py"])
+    # If no specific flags are set, launch the Streamlit UI by default.
+    elif not any([args.check_ocr, args.check_gemini, args.list_models, args.input, args.ui]):
+        run_streamlit_app()
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":
     main()
+

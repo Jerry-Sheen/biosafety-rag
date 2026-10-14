@@ -4,13 +4,13 @@ Unit tests for Persistent ChromaDB Vector Store.
 import tempfile
 from pathlib import Path
 from src.rag.vector_store import PersistentVectorStore
-from src.rag.embeddings import OllamaEmbeddingProvider
+from src.rag.embeddings import LocalEmbeddingProvider
 
 
 def test_vector_store_incremental_add_and_search():
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
         # Use mock embedding provider for tests
-        embedder = OllamaEmbeddingProvider(base_url="http://localhost:11434")
+        embedder = LocalEmbeddingProvider()
         vs = PersistentVectorStore(
             persist_directory=Path(tmp_dir),
             collection_name="test_collection",

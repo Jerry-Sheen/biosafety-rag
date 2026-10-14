@@ -48,7 +48,7 @@ def render_admin_view(vector_store: PersistentVectorStore):
     with st.expander("🛡️ 시스템 보안 및 환경 상태", expanded=False):
         col_s1, col_s2, col_s3 = st.columns(3)
         col_s1.metric("애플리케이션 환경", config.app_env.upper())
-        col_s2.metric("LLM 모델", config.ollama_llm_model)
+        col_s2.metric("LLM 모델", config.gemini_model)
         col_s3.metric("영구 DB 경로", str(config.chroma_persist_dir.name))
 
     tabs = st.tabs(["📤 문서 업로드 및 임베딩", "📊 벡터 DB 현황 및 관리"])
