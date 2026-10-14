@@ -355,7 +355,12 @@ def run_streamlit_app():
 
     try:
         vector_store = _get_vector_store()
-        rag_engine = ConversationalRAGEngine(vector_store=vector_store)
+        # Initialize RAG engine with empty API keys so each user inputs their own API key
+        rag_engine = ConversationalRAGEngine(
+            vector_store=vector_store,
+            gemini_api_key="",
+            openai_api_key=""
+        )
     except Exception as e:
         st.error('❌ 벡터스토어 또는 엔진 초기화 실패')
         st.error(traceback.format_exc())
@@ -384,32 +389,47 @@ def run_streamlit_app():
                 "✨ Google Gemini (추천)",
                 "🟢 OpenAI (ChatGPT)"
             ],
-            index=0 if config.llm_provider == "gemini" else 1
+            index=0
         )
+
+        if "user_gemini_api_key" not in st.session_state:
+            st.session_state.user_gemini_api_key = ""
+        if "user_openai_api_key" not in st.session_state:
+            st.session_state.user_openai_api_key = ""
+
         if "Gemini" in provider_option:
             rag_engine.llm_provider = "gemini"
             api_key_input = st.text_input(
-                "🔑 Gemini API 키:",
-                value=config.gemini_api_key or "",
+                "🔑 Gemini API 키 입력:",
+                value=st.session_state.user_gemini_api_key,
                 type="password",
-                help=".env에 GEMINI_API_KEY를 설정하거나 여기에 직접 입력하세요."
+                placeholder="AIzaSy...",
+                help="Google AI Studio에서 무료로 발급받은 API 키를 입력해 주세요. (개인 키는 서버에 저장되지 않습니다)"
             )
-            if api_key_input:
-                rag_engine.gemini_api_key = api_key_input
-                rag_engine.gemini_model_resolver.api_key = api_key_input
+            st.session_state.user_gemini_api_key = api_key_input.strip()
+            rag_engine.gemini_api_key = st.session_state.user_gemini_api_key or ""
+            rag_engine.gemini_model_resolver.api_key = rag_engine.gemini_api_key
+
+            if not st.session_state.user_gemini_api_key:
+                st.info("💡 질문을 하려면 본인의 Gemini API 키가 필요합니다.\n\n👉 [Google AI Studio에서 무료 키 발급받기](https://aistudio.google.com/app/apikey)")
             st.caption(f"🎯 모델: `{rag_engine.gemini_model}`")
         else:
             rag_engine.llm_provider = "openai"
             api_key_input = st.text_input(
-                "🔑 OpenAI API 키:",
-                value=config.openai_api_key or "",
+                "🔑 OpenAI API 키 입력:",
+                value=st.session_state.user_openai_api_key,
                 type="password",
-                help=".env에 OPENAI_API_KEY를 설정하거나 여기에 직접 입력하세요."
+                placeholder="sk-...",
+                help="OpenAI 플랫폼에서 발급받은 API 키를 입력해 주세요. (개인 키는 서버에 저장되지 않습니다)"
             )
-            if api_key_input:
+            st.session_state.user_openai_api_key = api_key_input.strip()
+            rag_engine.openai_api_key = st.session_state.user_openai_api_key or ""
+            if st.session_state.user_openai_api_key:
                 from src.rag.openai_client import OpenAIClient
-                rag_engine.openai_api_key = api_key_input
-                rag_engine.openai_client = OpenAIClient(api_key=api_key_input, model=rag_engine.openai_model)
+                rag_engine.openai_client = OpenAIClient(api_key=rag_engine.openai_api_key, model=rag_engine.openai_model)
+            else:
+                rag_engine.openai_client = None
+                st.info("💡 질문을 하려면 본인의 OpenAI API 키가 필요합니다.\n\n👉 [OpenAI 플랫폼에서 키 발급받기](https://platform.openai.com/api-keys)")
             st.caption(f"🟢 모델: `{rag_engine.openai_model}`")
 
         top_k = st.slider("검색 청크 수 (Top‑K)", min_value=1, max_value=10, value=5, step=1)
@@ -494,6 +514,25 @@ def run_streamlit_app():
 
     # Chat input box
     if prompt := st.chat_input("생물작용제 및 독소 관련 질문을 입력하세요..."):
+        # Check API key configuration before running RAG search
+        current_api_key = rag_engine.gemini_api_key if rag_engine.llm_provider == "gemini" else rag_engine.openai_api_key
+        if not current_api_key or not current_api_key.strip():
+            st.session_state.user_messages.append({"role": "user", "content": prompt})
+            provider_label = "Google Gemini" if rag_engine.llm_provider == "gemini" else "OpenAI"
+            key_url = "https://aistudio.google.com/app/apikey" if rag_engine.llm_provider == "gemini" else "https://platform.openai.com/api-keys"
+            st.session_state.user_messages.append({
+                "role": "assistant",
+                "content": (
+                    f"⚠️ **{provider_label} API 키가 설정되지 않았습니다.**\n\n"
+                    f"답변을 생성하기 위해서는 사용자의 API 키가 필요합니다.\n\n"
+                    f"1. 좌측 사이드바의 **'🔑 {provider_label} API 키 입력'** 란에 본인의 API 키를 입력해 주세요.\n"
+                    f"2. 아직 키가 없으시다면 [👉 {provider_label} API 키 발급받기]({key_url})에서 무료로 발급받으실 수 있습니다.\n\n"
+                    f"*(※ 입력하신 API 키는 브라우저 세션 중에만 임시 사용되며, 서버에 일절 저장되지 않습니다.)*"
+                )
+            })
+            _save_session(st.session_state.current_session_id, st.session_state.user_messages)
+            st.rerun()
+
         st.session_state.user_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
