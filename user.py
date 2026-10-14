@@ -265,13 +265,10 @@ def run_streamlit_app():
     except Exception as e:
         st.error(f"📛 페이지 설정 오류: {e}")
         st.stop()
-    # Optional debug/info message
-    st.write('🔧 UI 초기화 중...')
     # Import core modules with error handling
     try:
         from src.rag.vector_store import PersistentVectorStore
         from src.rag.engine import ConversationalRAGEngine
-        st.write('✅ VectorStore, Engine 모듈 로드 성공')
     except Exception as e:
         st.error('❌ 필수 모듈 로드 실패')
         st.error(traceback.format_exc())
@@ -352,10 +349,15 @@ def run_streamlit_app():
             st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
             st.session_state.user_messages = _default_messages()
 
-    # Initialize vector store and RAG engine with error handling
-    @st.cache_resource(show_spinner="벡터 데이터베이스 및 임베딩 모델 로딩 중...")
-    def _get_vector_store():
-        return PersistentVectorStore()
+    # Initialize vector store and RAG engine with dynamic recovery
+    def _get_vector_store(force_reload: bool = False):
+        if force_reload or "vector_store_instance" not in st.session_state:
+            st.session_state["vector_store_instance"] = PersistentVectorStore()
+        else:
+            store = st.session_state["vector_store_instance"]
+            if store.collection.count() == 0:
+                st.session_state["vector_store_instance"] = PersistentVectorStore()
+        return st.session_state["vector_store_instance"]
 
     try:
         vector_store = _get_vector_store()
@@ -422,6 +424,11 @@ def run_streamlit_app():
         st.markdown("### 📊 지식 베이스 현황")
         st.metric("총 색인 청크 수", f"{stats['total_chunks']:,} 개")
         st.metric("저장된 문서 수", f"{stats['unique_documents_count']} 권")
+        if stats['total_chunks'] == 0:
+            st.warning("⚠️ 지식 베이스 청크가 0개입니다.")
+            if st.button("🔄 지식 베이스 다시 연결", use_container_width=True):
+                st.session_state.pop("vector_store_instance", None)
+                st.rerun()
 
         st.divider()
 

@@ -26,13 +26,27 @@ class PersistentVectorStore:
         collection_name: Optional[str] = None,
         embedding_provider: Optional[Any] = None,
     ):
-        self.persist_directory = str(persist_directory or config.chroma_persist_dir)
+        target_dir = Path(persist_directory or config.chroma_persist_dir)
+        if not (target_dir / "chroma.sqlite3").is_file():
+            candidates = [
+                Path(__file__).resolve().parent.parent.parent / "data" / "chroma_db",
+                Path.cwd() / "data" / "chroma_db",
+                Path("data/chroma_db").resolve(),
+            ]
+            for cand in candidates:
+                if (cand / "chroma.sqlite3").is_file():
+                    logger.info(f"Resolved ChromaDB directory via candidate search: {cand}")
+                    target_dir = cand
+                    break
+
+        self.persist_directory = str(target_dir)
         self.collection_name = collection_name or config.chroma_collection_name
         self.embedding_provider = embedding_provider or get_embedding_provider()
         # Expected embedding dimension – may be inferred from provider or existing collection
         self._expected_dimension: Optional[int] = getattr(self.embedding_provider, "dimension", None)
 
         logger.info(f"Connecting to ChromaDB at: {self.persist_directory}")
+
         self.client = chromadb.PersistentClient(
             path=self.persist_directory,
             settings=Settings(anonymized_telemetry=False),
