@@ -496,9 +496,9 @@ def run_streamlit_app():
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="user-header">💬 KRIBB Biosafety AI Agent </div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-header">💬 KRIBB Biosafety AI Agent - 생물안전관리 AI 에이전트</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="user-desc"> 생물안전 문서, 법령, 고시, 지침을 바탕으로 정확하고 신뢰할 수 있는 답변을 제공합니다.</div>',
+        '<div class="user-desc"> 생물안전 관련 문서, 법령, 고시, 지침을 바탕으로 정확하고 신뢰할 수 있는 답변을 제공합니다.</div>',
         unsafe_allow_html=True
     )
 
