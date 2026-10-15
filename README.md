@@ -190,3 +190,13 @@ docker compose ps
 - **관리자 웹**: `http://localhost:8501`
 - **사용자 웹**: `http://localhost:8502`
 - 두 서비스는 공유 볼륨을 통해 영구 벡터 DB 데이터를 실시간으로 동기화합니다.
+
+---
+
+## 📄 License
+
+**Copyright (c) 2026 신용환 (Yonghwan Shin). All rights reserved.**
+
+본 프로젝트의 소스코드 및 관련 모든 문서는 **독점 소프트웨어(Proprietary Software)**입니다.  
+오직 단순 열람(보기) 및 참조 목적으로만 제공되며, 저작권자의 사전 서면 허가 없이 무단 복제, 수정, 편집, 배포, 2차적 저작물 작성 및 상업적 이용을 엄격히 금지합니다. 자세한 내용은 [`LICENSE`](LICENSE) 파일을 참조하십시오.
+
