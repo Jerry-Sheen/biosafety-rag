@@ -15,7 +15,7 @@ except Exception:
 
 from config import config
 from src.rag.vector_store import PersistentVectorStore
-from src.rag.openai_client import OpenAIClient
+from src.rag.openai_client import OpenAIClient, is_context_length_exceeded
 from src.rag.gemini_client import GeminiModelResolver, classify_gemini_error
 from src.rag.law_search import LawSearchClient
 from src.rag.pathogen_registry import PathogenRegistry
@@ -261,7 +261,7 @@ class ConversationalRAGEngine:
         self.gemini_model, _ = self.gemini_model_resolver.resolve_model(initial_gemini_model)
         # OpenAI setup
         self.openai_api_key = openai_api_key or config.openai_api_key
-        self.openai_model = openai_model or os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        self.openai_model = openai_model or getattr(config, "openai_model", None) or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         self.openai_client = OpenAIClient(api_key=self.openai_api_key, model=self.openai_model)
         # Law Search client (law.go.kr)
         self.law_search_client = LawSearchClient()
@@ -647,10 +647,19 @@ class ConversationalRAGEngine:
                                "OpenAI 모델을 사용하려면 사이드바에서 API 키를 입력하거나 .env 파일에 OPENAI_API_KEY를 설정해주세요."
                 }
                 return
+
+            # Keep client model in sync with engine
+            if hasattr(self.openai_client, "model") and self.openai_client.model != self.openai_model:
+                self.openai_client.model = self.openai_model
+
+            # Proactive handling for low-context models (e.g. gpt-3.5-turbo with 16k limit)
+            is_low_context = "3.5" in str(self.openai_model)
+            history_slice = -1 if is_low_context else -4
             messages = []
-            for m in chat_history[-4:]:
+            for m in chat_history[history_slice:]:
                 messages.append({"role": m["role"], "content": m["content"]})
             messages.append({"role": "user", "content": user_prompt_with_context})
+
             try:
                 stream = self.openai_client.chat_stream(
                     messages=messages,
@@ -669,12 +678,20 @@ class ConversationalRAGEngine:
                 yield {"type": "status", "stage": "done", "message": "답변 완료"}
             except Exception as e:
                 logger.error(f"Error during OpenAI streaming: {e}")
-                user_msg = (
-                    "⚠️ **OpenAI API 연결에 실패했습니다.**\n\n"
-                    "1) API 키가 올바르게 설정되었는지 확인하세요.\n"
-                    "2) 네트워크가 정상인지 확인하고 방화벽 등에서 차단되지 않았는지 확인하십시오.\n"
-                    "3) `.env` 파일에 `OPENAI_API_KEY=your_key` 를 추가하거나, 사이드바에 키를 입력하십시오."
-                )
-                yield {"type": "error", "content": f"{user_msg}\n\n*상세 오류: {str(e)}*"}
+                err_str = str(e)
+                if is_context_length_exceeded(e):
+                    user_msg = (
+                        "⚠️ **OpenAI 모델의 최대 컨텍스트(토큰) 한도를 초과했습니다.**\n\n"
+                        f"현재 선택된 `{self.openai_model}` 모델은 처리 가능한 토큰 한도(16,385 토큰)가 작아 방대한 법령·지침 데이터를 모두 담지 못했습니다.\n\n"
+                        "👉 **해결 방법**: 좌측 사이드바의 **'OpenAI 모델 선택'**에서 128k 토큰을 지원하는 **`gpt-4o-mini`** (추천) 또는 **`gpt-4o`** 모델을 선택해 주세요."
+                    )
+                else:
+                    user_msg = (
+                        "⚠️ **OpenAI API 연결에 실패했습니다.**\n\n"
+                        "1) API 키가 올바르게 설정되었는지 확인하세요.\n"
+                        "2) 네트워크가 정상인지 확인하고 방화벽 등에서 차단되지 않았는지 확인하십시오.\n"
+                        "3) `.env` 파일에 `OPENAI_API_KEY=your_key` 를 추가하거나, 사이드바에 키를 입력하십시오."
+                    )
+                yield {"type": "error", "content": f"{user_msg}\n\n*상세 오류: {err_str}*"}
                 return
 

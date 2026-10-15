@@ -332,7 +332,7 @@ def run_streamlit_app():
         return [
             {
                 "role": "assistant",
-                "content": "안녕하세요! KRIBB 생물안전 관리 AI 에이전트입니다. 병원균, 위험균 생물작용제 및 독소 관련 법/제도, 신고 절차, 주의 사항 등에 관해 궁금한 점을 질문해 주세요."
+                "content": "안녕하세요! KRIBB 생물안전 관리 AI 에이전트입니다. 병원균, 위험균, 생물작용제 및 독소 관련 법/제도, 신고 절차, 주의 사항 등에 관해 궁금한 점을 질문해 주세요."
             }
         ]
 
@@ -423,14 +423,40 @@ def run_streamlit_app():
                 help="OpenAI 플랫폼에서 발급받은 API 키를 입력해 주세요. (개인 키는 서버에 저장되지 않습니다)"
             )
             st.session_state.user_openai_api_key = api_key_input.strip()
-            rag_engine.openai_api_key = st.session_state.user_openai_api_key or ""
-            if st.session_state.user_openai_api_key:
+            active_key = st.session_state.user_openai_api_key or config.openai_api_key or ""
+            rag_engine.openai_api_key = active_key
+
+            # OpenAI Model selection (gpt-4o-mini supports 128k context to avoid context_length_exceeded)
+            if "user_openai_model" not in st.session_state:
+                st.session_state.user_openai_model = getattr(config, "openai_model", "gpt-4o-mini")
+
+            openai_models = [
+                "gpt-4o-mini",
+                "gpt-4o",
+                "gpt-4-turbo",
+                "gpt-3.5-turbo"
+            ]
+            if st.session_state.user_openai_model not in openai_models:
+                openai_models.insert(0, st.session_state.user_openai_model)
+
+            selected_model = st.selectbox(
+                "🎯 OpenAI 모델 선택:",
+                options=openai_models,
+                index=openai_models.index(st.session_state.user_openai_model),
+                help="gpt-4o-mini는 128k 토큰 컨텍스트를 지원하여 대용량 법령 및 지침서 데이터를 오류 없이 안정적으로 처리합니다. (기본 추천)"
+            )
+            st.session_state.user_openai_model = selected_model
+            rag_engine.openai_model = selected_model
+
+            if active_key:
                 from src.rag.openai_client import OpenAIClient
                 rag_engine.openai_client = OpenAIClient(api_key=rag_engine.openai_api_key, model=rag_engine.openai_model)
             else:
                 rag_engine.openai_client = None
                 st.info("💡 질문을 하려면 본인의 OpenAI API 키가 필요합니다.\n\n👉 [OpenAI 플랫폼에서 키 발급받기](https://platform.openai.com/api-keys)")
-            st.caption(f"🟢 모델: `{rag_engine.openai_model}`")
+
+            token_desc = "128k 토큰 지원 (추천)" if "4" in rag_engine.openai_model else "16k 토큰 (긴 법령 검색 시 초과 주의)"
+            st.caption(f"🟢 모델: `{rag_engine.openai_model}` ({token_desc})")
 
         top_k = st.slider("검색 청크 수 (Top‑K)", min_value=1, max_value=10, value=5, step=1)
 

@@ -53,6 +53,8 @@ class AppConfig(BaseModel):
         "LOCAL_EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"))
     # OpenAI Settings
     openai_api_key: str = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    # Default OpenAI model (gpt-4o-mini supports 128k context window to prevent context_length_exceeded)
+    openai_model: str = Field(default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
     # Default OpenAI embedding model
     openai_embed_model: str = Field(default_factory=lambda: os.getenv("OPENAI_EMBED_MODEL", "text-embedding-ada-002"))
 
