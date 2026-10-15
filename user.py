@@ -256,7 +256,7 @@ def run_streamlit_app():
 # Set page config before any other Streamlit calls
     try:
         st.set_page_config(
-            page_title="Biosafety AI Agent - 생물안전 AI 어시스턴트",
+            page_title="Biosafety AI Agent - 생물안전 관리 AI 에이전트",
             page_icon="💬",
             layout="wide",
             initial_sidebar_state="expanded",
@@ -332,7 +332,7 @@ def run_streamlit_app():
         return [
             {
                 "role": "assistant",
-                "content": "안녕하세요! 생물안전 관리 AI 어시스턴트입니다. 병원균, 위험균 생물작용제 및 독소 관련 법/제도, 신고 절차, 주의 사항 등에 관해 궁금한 점을 질문해 주세요."
+                "content": "안녕하세요! KRIBB 생물안전 관리 AI 에이전트입니다. 병원균, 위험균 생물작용제 및 독소 관련 법/제도, 신고 절차, 주의 사항 등에 관해 궁금한 점을 질문해 주세요."
             }
         ]
 
@@ -496,7 +496,7 @@ def run_streamlit_app():
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="user-header">💬 KRIBB Biosafety AI Agent - 생물안전관리 AI 에이전트</div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-header">💬 KRIBB Biosafety AI Agent - 생물안전 관리 AI 에이전트</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="user-desc"> 생물안전 관련 문서, 법령, 고시, 지침을 바탕으로 정확하고 신뢰할 수 있는 답변을 제공합니다.</div>',
         unsafe_allow_html=True
