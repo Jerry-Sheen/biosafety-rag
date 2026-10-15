@@ -97,5 +97,62 @@ class SecretsManager:
         return f"{secret[:6]}...{secret[-4:]}"
 
 
+def sanitize_api_key(key: Optional[str]) -> str:
+    """
+    Sanitizes API keys by:
+    1. Normalizing unicode characters (NFKC).
+    2. Stripping quotes, whitespace, and invisible unicode characters (zero-width spaces, BOM, etc.).
+    3. Normalizing unicode dashes/hyphens to ASCII hyphen (-).
+    4. Stripping accidentally copied variable prefixes (e.g. 'OPENAI_API_KEY=', 'Bearer ').
+    5. Ensuring the key is strictly ASCII to prevent 'ascii' codec can't encode errors in HTTP headers.
+    """
+    if not key:
+        return ""
+    import unicodedata
+    import re
+
+    # 1. Normalize unicode
+    cleaned = unicodedata.normalize("NFKC", str(key)).strip()
+
+    # 2. Strip surrounding quotes & whitespace
+    cleaned = cleaned.strip("'\"`“”‘’ \t\r\n")
+
+    # 3. Normalize various unicode dashes to standard ASCII hyphen
+    dash_chars = ["\u2010", "\u2011", "\u2012", "\u2013", "\u2014", "\u2015", "\u2212", "\uFE58", "\uFE63", "\uFF0D"]
+    for d in dash_chars:
+        cleaned = cleaned.replace(d, "-")
+
+    # 4. Remove invisible unicode characters (zero-width spaces, BOM, non-breaking spaces)
+    invisible_chars = ["\u200b", "\u200c", "\u200d", "\u2060", "\ufeff", "\u00a0", "\u3000"]
+    for inv in invisible_chars:
+        cleaned = cleaned.replace(inv, "")
+
+    # 5. Strip accidentally included variable assignment or header prefixes
+    prefixes = [
+        "openai_api_key=", "openai_api_key:", "openai_api_key ", "openai_api_key",
+        "gemini_api_key=", "gemini_api_key:", "gemini_api_key ", "gemini_api_key",
+        "api_key=", "api_key:", "api_key ", "bearer ", "키=", "키:", "키 "
+    ]
+    for prefix in prefixes:
+        if cleaned.lower().startswith(prefix):
+            cleaned = cleaned[len(prefix):].strip()
+            break
+
+    # 6. Re-strip quotes in case they were inside the prefix
+    cleaned = cleaned.strip("'\"`“”‘’ ")
+
+    # 7. If non-ASCII characters remain (e.g. accidentally pasted Korean characters or symbols):
+    if not cleaned.isascii():
+        # Check if an actual valid key (e.g., sk-...) is embedded inside
+        match = re.search(r"sk-[a-zA-Z0-9_\-]{20,}", cleaned)
+        if match:
+            cleaned = match.group(0)
+        else:
+            # Otherwise, strip any non-ASCII characters
+            cleaned = re.sub(r"[^\x21-\x7E]", "", cleaned)
+
+    return cleaned.strip()
+
+
 # Global Singleton instance
 secrets_manager = SecretsManager()

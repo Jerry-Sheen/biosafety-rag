@@ -16,6 +16,7 @@ except Exception:
 from config import config
 from src.rag.vector_store import PersistentVectorStore
 from src.rag.openai_client import OpenAIClient, is_context_length_exceeded
+from src.security.secrets_manager import sanitize_api_key
 from src.rag.gemini_client import GeminiModelResolver, classify_gemini_error
 from src.rag.law_search import LawSearchClient
 from src.rag.pathogen_registry import PathogenRegistry
@@ -260,7 +261,7 @@ class ConversationalRAGEngine:
         initial_gemini_model = gemini_model or config.gemini_model or "gemini-2.5-flash"
         self.gemini_model, _ = self.gemini_model_resolver.resolve_model(initial_gemini_model)
         # OpenAI setup
-        self.openai_api_key = openai_api_key or config.openai_api_key
+        self.openai_api_key = sanitize_api_key(openai_api_key if openai_api_key is not None else config.openai_api_key)
         self.openai_model = openai_model or getattr(config, "openai_model", None) or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         self.openai_client = OpenAIClient(api_key=self.openai_api_key, model=self.openai_model)
         # Law Search client (law.go.kr)
@@ -640,6 +641,11 @@ class ConversationalRAGEngine:
 
         # Step 8-B: OpenAI Streaming
         if self.llm_provider == "openai":
+            # Ensure API key is sanitized
+            self.openai_api_key = sanitize_api_key(self.openai_api_key or getattr(self.openai_client, "api_key", ""))
+            if self.openai_client and getattr(self.openai_client, "api_key", "") != self.openai_api_key:
+                self.openai_client.set_api_key(self.openai_api_key)
+
             if not getattr(self.openai_client, "is_configured", False):
                 yield {
                     "type": "error",
@@ -679,7 +685,16 @@ class ConversationalRAGEngine:
             except Exception as e:
                 logger.error(f"Error during OpenAI streaming: {e}")
                 err_str = str(e)
-                if is_context_length_exceeded(e):
+                if isinstance(e, UnicodeEncodeError) or "codec can't encode" in err_str:
+                    user_msg = (
+                        "⚠️ **입력된 OpenAI API 키에 잘못된 문자(한글, 특수 유니코드, 보이지 않는 공백 등)가 포함되어 있습니다.**\n\n"
+                        "OpenAI API 키는 영문 알파벳, 숫자, 하이픈(-)으로만 구성되어야 합니다.\n\n"
+                        "👉 **해결 방법**:\n"
+                        "1. 좌측 사이드바의 **'OpenAI API 키 입력'**란을 모두 지워주세요.\n"
+                        "2. [OpenAI 플랫폼](https://platform.openai.com/api-keys)에서 발급받은 `sk-...` 키를 직접 복사하여 붙여넣어 주세요.\n"
+                        "3. 키 앞뒤나 중간에 한글 또는 따옴표가 들어가지 않도록 확인해 주세요."
+                    )
+                elif is_context_length_exceeded(e):
                     user_msg = (
                         "⚠️ **OpenAI 모델의 최대 컨텍스트(토큰) 한도를 초과했습니다.**\n\n"
                         f"현재 선택된 `{self.openai_model}` 모델은 처리 가능한 토큰 한도(16,385 토큰)가 작아 방대한 법령·지침 데이터를 모두 담지 못했습니다.\n\n"

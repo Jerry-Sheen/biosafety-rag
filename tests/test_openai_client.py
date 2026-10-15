@@ -56,3 +56,31 @@ def test_openai_context_length_exceeded_auto_recovery():
     assert "성공적인 복구 완료" in tokens
     assert call_count == 2
     assert client.model == "gpt-4o-mini"
+
+
+def test_sanitize_api_key():
+    """Verify that sanitize_api_key strips prefixes, unicode dashes, quotes, and non-ascii chars."""
+    from src.security.secrets_manager import sanitize_api_key
+
+    # 1. Unicode dashes and quotes
+    dirty_1 = '  “OPENAI_API_KEY: sk-proj\u201312345678901234567890\u200b”  '
+    assert sanitize_api_key(dirty_1) == "sk-proj-12345678901234567890"
+
+    # 2. Variable assignment prefix
+    dirty_2 = "OPENAI_API_KEY=sk-proj-abcdef12345678901234"
+    assert sanitize_api_key(dirty_2) == "sk-proj-abcdef12345678901234"
+
+    # 3. Accidental Korean chars around key
+    dirty_3 = "sk-proj-abcdef12345678901234한글"
+    assert sanitize_api_key(dirty_3) == "sk-proj-abcdef12345678901234"
+
+    # 4. Pure Korean input produces empty string (safe from ascii encode error)
+    dirty_4 = "오픈에이아이키"
+    assert sanitize_api_key(dirty_4) == ""
+
+
+def test_openai_client_handles_non_ascii_safely():
+    """Verify that OpenAIClient never passes non-ascii characters to httpx."""
+    client = OpenAIClient(api_key="sk-123456789012345한글키")
+    assert client.api_key.isascii()
+

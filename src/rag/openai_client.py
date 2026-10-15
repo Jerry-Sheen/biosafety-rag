@@ -6,6 +6,8 @@ from src.security.logger import get_secure_logger
 
 logger = get_secure_logger("openai_client")
 
+from src.security.secrets_manager import sanitize_api_key
+
 def is_context_length_exceeded(err: Exception) -> bool:
     """Detects OpenAI context length exceeded errors across SDK formats and exceptions."""
     s = f"{err} {repr(err)}".lower()
@@ -32,14 +34,20 @@ class OpenAIClient:
         """
         # Use provided api_key if given (including empty string), otherwise fall back to config
         if api_key is not None:
-            self.api_key = api_key
+            self.api_key = sanitize_api_key(api_key)
         else:
-            self.api_key = config.openai_api_key
+            self.api_key = sanitize_api_key(config.openai_api_key)
         # Initialise OpenAI client (v1 SDK)
         # If api_key is empty, the client will still be created but requests will fail; we handle that later.
         self.client = openai.OpenAI(api_key=self.api_key) if self.api_key else openai.OpenAI()
         self.model = model or getattr(config, "openai_model", None) or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         self.embed_model = embed_model or config.openai_embed_model or "text-embedding-ada-002"
+        self.is_configured = bool(self.api_key)
+
+    def set_api_key(self, api_key: str):
+        """Updates and sanitizes the API key, re-initializing the underlying client."""
+        self.api_key = sanitize_api_key(api_key)
+        self.client = openai.OpenAI(api_key=self.api_key) if self.api_key else openai.OpenAI()
         self.is_configured = bool(self.api_key)
 
     def generate(self, prompt: str, **kwargs) -> str:
@@ -54,6 +62,9 @@ class OpenAIClient:
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
+            if isinstance(e, UnicodeEncodeError) or "codec can't encode" in str(e):
+                logger.error(f"OpenAI UnicodeEncodeError: {e}")
+                raise ValueError("OpenAI API 키에 유효하지 않은 문자(한글, 특수 유니코드, 보이지 않는 공백 등)가 포함되어 있습니다. 영문/숫자로 된 올바른 API 키를 입력해 주세요.")
             if is_context_length_exceeded(e) and "3.5" in self.model:
                 logger.info(f"Context length exceeded for {self.model}. Auto-upgrading to gpt-4o-mini (128k context).")
                 self.model = "gpt-4o-mini"
@@ -72,6 +83,9 @@ class OpenAIClient:
                 **kwargs,
             )
         except Exception as e:
+            if isinstance(e, UnicodeEncodeError) or "codec can't encode" in str(e):
+                logger.error(f"OpenAI UnicodeEncodeError: {e}")
+                raise ValueError("OpenAI API 키에 유효하지 않은 문자(한글, 특수 유니코드, 보이지 않는 공백 등)가 포함되어 있습니다. 영문/숫자로 된 올바른 API 키를 입력해 주세요.")
             if is_context_length_exceeded(e) and "3.5" in self.model:
                 logger.info(f"Context length exceeded for {self.model}. Auto-upgrading to gpt-4o-mini (128k context).")
                 self.model = "gpt-4o-mini"
@@ -101,6 +115,9 @@ class OpenAIClient:
                 **kwargs,
             )
         except Exception as e:
+            if isinstance(e, UnicodeEncodeError) or "codec can't encode" in str(e):
+                logger.error(f"OpenAI UnicodeEncodeError: {e}")
+                raise ValueError("OpenAI API 키에 유효하지 않은 문자(한글, 특수 유니코드, 보이지 않는 공백 등)가 포함되어 있습니다. 영문/숫자로 된 올바른 API 키를 입력해 주세요.")
             if is_context_length_exceeded(e):
                 logger.warning(f"OpenAI context_length_exceeded on model {self.model}: {e}")
                 # 1. Auto-upgrade from gpt-3.5-turbo (16k) to gpt-4o-mini (128k context)

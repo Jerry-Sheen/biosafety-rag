@@ -41,6 +41,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import config
+from src.security.secrets_manager import sanitize_api_key
 
 
 def run_check_ocr():
@@ -406,11 +407,15 @@ def run_streamlit_app():
                 placeholder="AIzaSy...",
                 help="Google AI Studio에서 무료로 발급받은 API 키를 입력해 주세요. (개인 키는 서버에 저장되지 않습니다)"
             )
-            st.session_state.user_gemini_api_key = api_key_input.strip()
-            rag_engine.gemini_api_key = st.session_state.user_gemini_api_key or ""
+            raw_gemini = api_key_input.strip()
+            cleaned_gemini = sanitize_api_key(raw_gemini)
+            if raw_gemini and raw_gemini != cleaned_gemini:
+                st.info("💡 입력된 Gemini API 키에서 불필요한 따옴표/공백/접두사를 자동으로 정제했습니다.")
+            st.session_state.user_gemini_api_key = cleaned_gemini
+            rag_engine.gemini_api_key = cleaned_gemini or sanitize_api_key(config.gemini_api_key) or ""
             rag_engine.gemini_model_resolver.api_key = rag_engine.gemini_api_key
 
-            if not st.session_state.user_gemini_api_key:
+            if not rag_engine.gemini_api_key:
                 st.info("💡 질문을 하려면 본인의 Gemini API 키가 필요합니다.\n\n👉 [Google AI Studio에서 무료 키 발급받기](https://aistudio.google.com/app/apikey)")
             st.caption(f"🎯 모델: `{rag_engine.gemini_model}`")
         else:
@@ -422,8 +427,12 @@ def run_streamlit_app():
                 placeholder="sk-...",
                 help="OpenAI 플랫폼에서 발급받은 API 키를 입력해 주세요. (개인 키는 서버에 저장되지 않습니다)"
             )
-            st.session_state.user_openai_api_key = api_key_input.strip()
-            active_key = st.session_state.user_openai_api_key or config.openai_api_key or ""
+            raw_openai = api_key_input.strip()
+            cleaned_openai = sanitize_api_key(raw_openai)
+            if raw_openai and raw_openai != cleaned_openai:
+                st.info("💡 입력된 OpenAI API 키에서 불필요한 따옴표/공백/유니코드 대시를 자동으로 정제했습니다.")
+            st.session_state.user_openai_api_key = cleaned_openai
+            active_key = cleaned_openai or sanitize_api_key(config.openai_api_key) or ""
             rag_engine.openai_api_key = active_key
 
             # OpenAI Model selection (gpt-4o-mini supports 128k context to avoid context_length_exceeded)
@@ -449,8 +458,14 @@ def run_streamlit_app():
             rag_engine.openai_model = selected_model
 
             if active_key:
+                if not active_key.isascii():
+                    st.error("⚠️ API 키에 한글 또는 유효하지 않은 문자가 포함되어 있습니다. 올바른 영문 API 키를 입력해 주세요.")
                 from src.rag.openai_client import OpenAIClient
-                rag_engine.openai_client = OpenAIClient(api_key=rag_engine.openai_api_key, model=rag_engine.openai_model)
+                if rag_engine.openai_client:
+                    rag_engine.openai_client.set_api_key(active_key)
+                    rag_engine.openai_client.model = rag_engine.openai_model
+                else:
+                    rag_engine.openai_client = OpenAIClient(api_key=active_key, model=rag_engine.openai_model)
             else:
                 rag_engine.openai_client = None
                 st.info("💡 질문을 하려면 본인의 OpenAI API 키가 필요합니다.\n\n👉 [OpenAI 플랫폼에서 키 발급받기](https://platform.openai.com/api-keys)")
