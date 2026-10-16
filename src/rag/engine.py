@@ -38,7 +38,7 @@ SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.
   1. 8대 필수 항목별 규제 요건
      (1. 분리신고 ~ 8. 인도신고를 하나도 빠짐없이 순서대로 설명. 해당 법률에서 특정 항목 규정이 없는 경우 반드시 '해당없음'과 이유 명시)
   2. 실무 가이드 절차
-     (★ 중요 안내사항 필수 표기: '2. 실무 가이드 절차' 제목 바로 아래에는 반드시 한 칸 띄운 후 다음 줄에 아래의 안내사항을 그대로 표기할 것:
+     (★ 중요 안내사항 필수 표기: [2단계: ...] 전체 대제목 바로 아래에는 안내사항을 절대 쓰지 마십시오. 오직 각 적용 법률 하위의 '2. 실무 가이드 절차' 소제목 바로 아래에만 한 칸 띄운 후 다음 줄에 아래의 안내사항을 그대로 표기할 것:
      - **안내사항 : 아래 실무 가이드 절차는 참고만 하시기 바라며, 실무 절차 관련 문의는 정책지원실 담당자(김성혜)에게 연락해 주시기 바랍니다.**)
      (소관 부처, 신청/신고 시스템 포털명 및 URL, 단계별 절차 Step 1~3, 구비서류 등)
   3. 주의사항
@@ -304,19 +304,21 @@ def inject_practical_guide_notice(text: str) -> str:
     # 1. 텍스트 전체에서 이미 존재하는 모든 안내문구를 일단 깨끗하게 제거
     cleaned_text = notice_pattern.sub("", text)
 
-    # 2. '2. 실무 가이드 절차' 또는 '실무 가이드 절차' 헤더를 찾아서 바로 아래에 1개씩만 삽입
+    # 2. '2. 실무 가이드 절차' 소제목만 매칭 (대제목인 '[2단계: ...]' 등은 엄격히 배제)
     header_pattern = re.compile(
         r"((?:#{1,4}\s*)?(?:\d+\.\s*)?실무\s*가이드\s*절차[^\n]*\n)",
         re.MULTILINE
     )
 
     def _replace_header(match):
+        full_match = match.group(0)
         header_line = match.group(1).rstrip()
+        # 대제목('[2단계: 법제처...]' 등)인 경우 안내문구를 삽입하지 않고 원본 그대로 유지
+        if any(keyword in header_line for keyword in ["2단계", "단계:", "8대 항목", "검색 기반", "법제처"]):
+            return full_match
         return f"{header_line}\n\n{PRACTICAL_GUIDE_NOTICE}\n"
 
     result, count = header_pattern.subn(_replace_header, cleaned_text)
-    if count == 0 and notice_pattern.search(text):
-        result = f"{PRACTICAL_GUIDE_NOTICE}\n\n{cleaned_text}"
 
     # 불필요한 연속 3줄 이상의 개행 정리
     result = re.sub(r"\n{3,}", "\n\n", result)
