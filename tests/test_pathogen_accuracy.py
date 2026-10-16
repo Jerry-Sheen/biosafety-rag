@@ -55,8 +55,8 @@ def test_yersinia_pestis_attributes(registry):
 
         # Check step1_markdown output
         md = info["step1_markdown"]
-        assert "* **감염병예방법(고위험병원체)**: 해당" in md
-        assert "* **가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)**: 해당" in md
+        assert "* **감염병예방법(고위험병원체)**: :red[**해당**]" in md
+        assert "* **가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)**: :red[**해당**]" in md
         assert "* **수산생물질병관리법**: 해당사항 없음" in md
 
         # Verify applicable laws list
@@ -123,7 +123,7 @@ def test_parse_pathogen_chunk_fallback():
     assert res is not None
     assert res["is_vet_special"] is True
     assert res["is_veterinary"] is True
-    assert "* **가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)**: 해당" in res["step1_markdown"]
+    assert "* **가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)**: :red[**해당**]" in res["step1_markdown"]
 
 
 def test_law_search_precautions():
