@@ -694,9 +694,7 @@ def run_streamlit_app():
                 if (!dock) {{
                     dock = parentDoc.createElement('div');
                     dock.id = 'st-pathogen-bottom-bar';
-                    dock.style.cssText = 'width: 66.7%; max-width: 100%; min-width: 320px; margin-bottom: 6px; margin-left: 0; margin-right: auto; padding: 0; box-sizing: border-box;';
-
-                    const optionsHtml = allKeys.map(k => '<option value="' + k.replace(/"/g, '&quot;') + '">').join('');
+                    dock.style.cssText = 'width: 100%; margin-bottom: 6px; padding: 0; box-sizing: border-box;';
 
                     dock.innerHTML = `
                         <div style="background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 9px; padding: 6px 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
@@ -705,16 +703,13 @@ def run_streamlit_app():
                                     🔍 병원균/바이러스 명칭 자동완성 검색:
                                 </span>
                                 <span style="font-size: 11px; color: #64748B;">
-                                    타이핑 시 자동완성 리스트 표시 및 선택 시 채팅창에 반영
+                                    클릭 또는 타이핑 시 병원균 목록이 표시되며, 선택 시 채팅창에 반영됩니다.
                                 </span>
                             </div>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <input type="text" list="pathogen-dock-datalist" id="pathogen-dock-input"
+                            <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+                                <input type="text" id="pathogen-dock-input"
                                        placeholder="병원균 이름 입력 (예: ab, abr, a, e, 아브린)..." autocomplete="off"
                                        style="flex: 1; min-width: 0; padding: 6px 12px; font-size: 13px; border: 1.5px solid #3B82F6; border-radius: 6px; outline: none; background: #FFFFFF; color: #0F172A;" />
-                                <datalist id="pathogen-dock-datalist">
-                                    ${{optionsHtml}}
-                                </datalist>
                                 <button id="btn-dock-apply"
                                         style="background-color: #2563EB; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background-color 0.15s; flex-shrink: 0;">
                                     채팅창에 적용
@@ -727,6 +722,15 @@ def run_streamlit_app():
 
                     const dockInput = dock.querySelector('#pathogen-dock-input');
                     const dockBtn = dock.querySelector('#btn-dock-apply');
+
+                    // Standalone custom dropdown popup sized to 2/3 of dock bar width
+                    let dockDropdown = parentDoc.getElementById('pathogen-dock-dropdown');
+                    if (!dockDropdown) {{
+                        dockDropdown = parentDoc.createElement('div');
+                        dockDropdown.id = 'pathogen-dock-dropdown';
+                        dockDropdown.style.cssText = 'position: fixed; display: none; max-height: 280px; overflow-y: auto; background: #ffffff; border: 1.5px solid #3B82F6; border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18); z-index: 999999; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
+                        parentDoc.body.appendChild(dockDropdown);
+                    }}
 
                     function applyValue(val) {{
                         if (!val) return;
@@ -745,29 +749,96 @@ def run_streamlit_app():
                         }}
                     }}
 
-                    dockInput.addEventListener('change', (e) => applyValue(e.target.value));
+                    function showDropdown(filterVal = '') {{
+                        const q = (filterVal || '').trim().replace(/^['"]+|['"]+$/g, '').toLowerCase();
+                        let matches;
+                        if (!q) {{
+                            matches = allKeys.slice(0, 60);
+                        }} else {{
+                            const fullMatches = allKeys.filter(k => k.toLowerCase().includes(q));
+                            const prefix = fullMatches.filter(k => k.toLowerCase().startsWith(q)).sort();
+                            const others = fullMatches.filter(k => !k.toLowerCase().startsWith(q)).sort();
+                            matches = prefix.concat(others).slice(0, 60);
+                        }}
+
+                        if (matches.length === 0) {{
+                            dockDropdown.innerHTML = '<div style="padding: 10px 14px; color: #94A3B8; font-size: 12px;">일치하는 병원균 명칭이 없습니다.</div>';
+                        }} else {{
+                            dockDropdown.innerHTML = '';
+                            matches.forEach(item => {{
+                                const row = parentDoc.createElement('div');
+                                row.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #F1F5F9; color: #1E293B; line-height: 1.4; word-break: break-word; transition: background 0.1s;';
+                                row.textContent = item;
+                                row.addEventListener('mouseover', () => {{ row.style.background = '#EFF6FF'; row.style.color = '#1D4ED8'; }});
+                                row.addEventListener('mouseout', () => {{ row.style.background = '#FFFFFF'; row.style.color = '#1E293B'; }});
+                                row.addEventListener('mousedown', (ev) => {{
+                                    ev.preventDefault();
+                                    dockInput.value = item;
+                                    applyValue(item);
+                                    dockDropdown.style.display = 'none';
+                                }});
+                                dockDropdown.appendChild(row);
+                            }});
+                        }}
+
+                        // Calculate size to be precisely 2/3 of the dock bar width
+                        const dockRect = dock.getBoundingClientRect();
+                        const inputRect = dockInput.getBoundingClientRect();
+                        const targetWidth = Math.max(320, Math.round(dockRect.width * 2 / 3));
+
+                        dockDropdown.style.width = targetWidth + 'px';
+                        dockDropdown.style.left = inputRect.left + 'px';
+
+                        const spaceBelow = window.innerHeight - inputRect.bottom;
+                        if (spaceBelow >= 300) {{
+                            dockDropdown.style.top = (inputRect.bottom + 4) + 'px';
+                            dockDropdown.style.bottom = 'auto';
+                        }} else {{
+                            dockDropdown.style.bottom = (window.innerHeight - inputRect.top + 6) + 'px';
+                            dockDropdown.style.top = 'auto';
+                        }}
+                        dockDropdown.style.display = 'block';
+                    }}
+
+                    dockInput.addEventListener('focus', () => showDropdown(dockInput.value));
+                    dockInput.addEventListener('click', () => showDropdown(dockInput.value));
+                    dockInput.addEventListener('input', (e) => showDropdown(e.target.value));
+
                     dockInput.addEventListener('keydown', (e) => {{
                         if (e.key === 'Enter') {{
                             e.preventDefault();
-                            applyValue(e.target.value);
+                            applyValue(dockInput.value);
+                            if (dockDropdown) dockDropdown.style.display = 'none';
+                        }} else if (e.key === 'Escape') {{
+                            if (dockDropdown) dockDropdown.style.display = 'none';
                         }}
                     }});
+
                     dockBtn.addEventListener('click', (e) => {{
                         e.preventDefault();
                         applyValue(dockInput.value);
+                        if (dockDropdown) dockDropdown.style.display = 'none';
                     }});
                     dockBtn.addEventListener('mouseover', () => {{ dockBtn.style.backgroundColor = '#1D4ED8'; }});
                     dockBtn.addEventListener('mouseout', () => {{ dockBtn.style.backgroundColor = '#2563EB'; }});
+
+                    parentDoc.addEventListener('mousedown', (e) => {{
+                        if (dockDropdown && !dock.contains(e.target) && !dockDropdown.contains(e.target)) {{
+                            dockDropdown.style.display = 'none';
+                        }}
+                    }});
 
                     window.parent.addEventListener('resize', () => {{
                         try {{
                             const ci = parentDoc.querySelector('[data-testid="stChatInput"]');
                             const dk = parentDoc.getElementById('st-pathogen-bottom-bar');
-                            if (ci && dk) {{
-                                const cw = ci.getBoundingClientRect().width || ci.offsetWidth;
-                                if (cw > 150) {{
-                                    dk.style.width = Math.round(cw * 2 / 3) + 'px';
-                                }}
+                            const dd = parentDoc.getElementById('pathogen-dock-dropdown');
+                            const inp = parentDoc.getElementById('pathogen-dock-input');
+                            if (dk && dd && inp && dd.style.display !== 'none') {{
+                                const dkRect = dk.getBoundingClientRect();
+                                const inpRect = inp.getBoundingClientRect();
+                                dd.style.width = Math.max(320, Math.round(dkRect.width * 2 / 3)) + 'px';
+                                dd.style.left = inpRect.left + 'px';
                             }}
                         }} catch (e) {{}}
                     }});
@@ -775,15 +846,6 @@ def run_streamlit_app():
                     if (chatInput.parentElement && chatInput.previousElementSibling !== dock) {{
                         chatInput.parentElement.insertBefore(dock, chatInput);
                     }}
-                }}
-
-                // Keep dock width synchronized with 2/3 of chatInput
-                const chatWidth = chatInput.getBoundingClientRect().width || chatInput.offsetWidth;
-                if (chatWidth > 150) {{
-                    dock.style.width = Math.round(chatWidth * 2 / 3) + 'px';
-                    dock.style.maxWidth = '100%';
-                }} else {{
-                    dock.style.width = '66.7%';
                 }}
             }} catch (err) {{
                 console.warn("Pathogen dock attachment notice:", err);
