@@ -677,161 +677,102 @@ def run_streamlit_app():
     <html>
     <head>
     <meta charset="utf-8">
-    <style>
-    * {{
-        box-sizing: border-box;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }}
-    body {{
-        margin: 0;
-        padding: 0;
-        background: transparent;
-    }}
-    .autocomplete-card {{
-        background: #F8FAFC;
-        border: 1.5px solid #CBD5E1;
-        border-radius: 9px;
-        padding: 6px 12px;
-        margin: 0;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-    }}
-    .autocomplete-header {{
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 4px;
-    }}
-    .autocomplete-title {{
-        font-size: 13px;
-        font-weight: 700;
-        color: #1E3A8A;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }}
-    .autocomplete-guide {{
-        font-size: 11px;
-        color: #64748B;
-    }}
-    .input-row {{
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }}
-    .datalist-input {{
-        flex: 1;
-        padding: 6px 12px;
-        font-size: 13px;
-        border: 1.5px solid #3B82F6;
-        border-radius: 6px;
-        outline: none;
-        background: #FFFFFF;
-        color: #0F172A;
-        transition: border-color 0.15s, box-shadow 0.15s;
-    }}
-    .datalist-input:focus {{
-        border-color: #1D4ED8;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-    }}
-    .btn-apply {{
-        background-color: #2563EB;
-        color: #FFFFFF;
-        border: none;
-        border-radius: 6px;
-        padding: 6px 14px;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: background-color 0.15s;
-    }}
-    .btn-apply:hover {{
-        background-color: #1D4ED8;
-    }}
-    </style>
     </head>
-    <body>
-    <div class="autocomplete-card">
-        <div class="autocomplete-header">
-            <span class="autocomplete-title">🔍 병원균/바이러스 명칭 자동완성 검색:</span>
-            <span class="autocomplete-guide">타이핑 시 아래로 자동완성 리스트가 펼쳐지며, 선택 시 채팅 입력창에 반영됩니다.</span>
-        </div>
-        <div class="input-row">
-            <input type="text" list="pathogen-native-datalist" id="pathogen-input-field" class="datalist-input"
-                   placeholder="병원균 이름 입력 (예: ab, abr, a, e, 아브린)..." autocomplete="off" />
-            <datalist id="pathogen-native-datalist">
-                {options_html}
-            </datalist>
-            <button id="btn-insert-chat" class="btn-apply">채팅창에 적용</button>
-        </div>
-    </div>
-
+    <body style="margin: 0; padding: 0; display: none;">
     <script>
     (function() {{
         const allKeys = {keys_json};
-        const searchInput = document.getElementById('pathogen-input-field');
-        const applyBtn = document.getElementById('btn-insert-chat');
 
-        // Dock autocomplete card directly above stChatInput in parent DOM
-        function dockAboveChatInput() {{
+        // Safely create and maintain a standalone dock bar above stChatInput without touching React DOM nodes
+        function initDockBar() {{
             try {{
                 const parentDoc = window.parent.document;
                 const chatInput = parentDoc.querySelector('[data-testid="stChatInput"]');
-                const frame = window.frameElement;
-                if (!chatInput || !frame) return;
+                if (!chatInput || !chatInput.parentElement) return;
 
-                const container = frame.closest('.element-container') || frame.parentElement || frame;
-                const parent = chatInput.parentElement;
-                if (parent && chatInput.previousElementSibling !== container) {{
-                    parent.insertBefore(container, chatInput);
-                    container.style.width = '100%';
-                    container.style.margin = '0 0 4px 0';
-                    container.style.padding = '0';
-                }}
-            }} catch (err) {{
-                // cross-origin or framing restriction fallback
-            }}
-        }}
+                let dock = parentDoc.getElementById('st-pathogen-bottom-bar');
+                if (!dock) {{
+                    dock = parentDoc.createElement('div');
+                    dock.id = 'st-pathogen-bottom-bar';
+                    dock.style.cssText = 'width: 100%; margin-bottom: 6px; padding: 0; box-sizing: border-box;';
 
-        dockAboveChatInput();
-        setTimeout(dockAboveChatInput, 50);
-        setTimeout(dockAboveChatInput, 200);
-        setTimeout(dockAboveChatInput, 600);
-        setInterval(dockAboveChatInput, 1000);
+                    const optionsHtml = allKeys.map(k => '<option value="' + k.replace(/"/g, '&quot;') + '">').join('');
 
-        function insertIntoParentChat(value) {{
-            if (!value) return;
-            try {{
-                const parentDoc = window.parent.document;
-                const ta = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
-                if (ta) {{
-                    const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value')?.set ||
-                                   Object.getOwnPropertyDescriptor(ta, 'value')?.set;
-                    if (setter) {{
-                        setter.call(ta, value);
-                    }} else {{
-                        ta.value = value;
+                    dock.innerHTML = `
+                        <div style="background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 9px; padding: 6px 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span style="font-size: 13px; font-weight: 700; color: #1E3A8A; display: flex; align-items: center; gap: 6px;">
+                                    🔍 병원균/바이러스 명칭 자동완성 검색:
+                                </span>
+                                <span style="font-size: 11px; color: #64748B;">
+                                    타이핑 시 아래로 자동완성 리스트가 펼쳐지며, 선택 시 채팅 입력창에 반영됩니다.
+                                </span>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="text" list="pathogen-dock-datalist" id="pathogen-dock-input"
+                                       placeholder="병원균 이름 입력 (예: ab, abr, a, e, 아브린)..." autocomplete="off"
+                                       style="flex: 1; padding: 6px 12px; font-size: 13px; border: 1.5px solid #3B82F6; border-radius: 6px; outline: none; background: #FFFFFF; color: #0F172A;" />
+                                <datalist id="pathogen-dock-datalist">
+                                    ${{optionsHtml}}
+                                </datalist>
+                                <button id="btn-dock-apply"
+                                        style="background-color: #2563EB; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background-color 0.15s;">
+                                    채팅창에 적용
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    chatInput.parentElement.insertBefore(dock, chatInput);
+
+                    const dockInput = dock.querySelector('#pathogen-dock-input');
+                    const dockBtn = dock.querySelector('#btn-dock-apply');
+
+                    function applyValue(val) {{
+                        if (!val) return;
+                        const ta = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
+                        if (ta) {{
+                            const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value')?.set ||
+                                           Object.getOwnPropertyDescriptor(ta, 'value')?.set;
+                            if (setter) {{
+                                setter.call(ta, val);
+                            }} else {{
+                                ta.value = val;
+                            }}
+                            ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            ta.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            ta.focus();
+                        }}
                     }}
-                    ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    ta.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    ta.focus();
+
+                    dockInput.addEventListener('change', (e) => applyValue(e.target.value));
+                    dockInput.addEventListener('keydown', (e) => {{
+                        if (e.key === 'Enter') {{
+                            e.preventDefault();
+                            applyValue(e.target.value);
+                        }}
+                    }});
+                    dockBtn.addEventListener('click', (e) => {{
+                        e.preventDefault();
+                        applyValue(dockInput.value);
+                    }});
+                    dockBtn.addEventListener('mouseover', () => {{ dockBtn.style.backgroundColor = '#1D4ED8'; }});
+                    dockBtn.addEventListener('mouseout', () => {{ dockBtn.style.backgroundColor = '#2563EB'; }});
+                }} else {{
+                    if (chatInput.parentElement && chatInput.previousElementSibling !== dock) {{
+                        chatInput.parentElement.insertBefore(dock, chatInput);
+                    }}
                 }}
             }} catch (err) {{
-                console.error("Chat input update error:", err);
+                console.warn("Pathogen dock attachment notice:", err);
             }}
         }}
 
-        searchInput.addEventListener('change', (e) => {{
-            insertIntoParentChat(e.target.value);
-        }});
-        searchInput.addEventListener('keydown', (e) => {{
-            if (e.key === 'Enter') {{
-                insertIntoParentChat(e.target.value);
-            }}
-        }});
-        applyBtn.addEventListener('click', () => {{
-            insertIntoParentChat(searchInput.value);
-        }});
+        initDockBar();
+        setTimeout(initDockBar, 50);
+        setTimeout(initDockBar, 200);
+        setTimeout(initDockBar, 600);
+        setInterval(initDockBar, 1000);
 
         // Live autocomplete dropdown attached directly to parent stChatInputTextArea
         try {{
@@ -876,7 +817,15 @@ def run_streamlit_app():
                         row.addEventListener('mouseout', () => {{ row.style.background = '#FFFFFF'; row.style.color = '#1E293B'; }});
                         row.addEventListener('mousedown', (ev) => {{
                             ev.preventDefault();
-                            insertIntoParentChat(item);
+                            const ta = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
+                            if (ta) {{
+                                const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value')?.set ||
+                                               Object.getOwnPropertyDescriptor(ta, 'value')?.set;
+                                if (setter) setter.call(ta, item); else ta.value = item;
+                                ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                ta.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                ta.focus();
+                            }}
                             dropdown.style.display = 'none';
                         }});
                         dropdown.appendChild(row);
@@ -905,7 +854,7 @@ def run_streamlit_app():
     </html>
     """
 
-    components.html(autocomplete_component_html, height=75)
+    components.html(autocomplete_component_html, height=0)
 
     # Chat input box
     if prompt := st.chat_input("병원균, 위험균, 생물작용제 및 독소에 대한 질문을 입력하세요..."):
