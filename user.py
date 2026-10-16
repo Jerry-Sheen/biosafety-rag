@@ -257,7 +257,7 @@ def run_streamlit_app():
 # Set page config before any other Streamlit calls
     try:
         st.set_page_config(
-            page_title="Biosafety AI Agent - 생물안전 관리 AI 에이전트",
+            page_title="SafeBio Navigator",
             page_icon="💬",
             layout="wide",
             initial_sidebar_state="expanded",
@@ -537,7 +537,10 @@ def run_streamlit_app():
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="user-header">💬 KRIBB Biosafety AI Agent - 생물안전 관리 AI 에이전트</div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-subheader" style="font-size:14px;">- KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-header" style="font-size:20px;">🧭 SafeBio Navigator, 안전한 생물 연구를 위한 규제 안내 나침반</div>', unsafe_allow_html=True)
+
+
     st.markdown(
         '<div class="user-desc"> 생물안전 관련 문서, 법령, 고시, 지침을 바탕으로 정확하고 신뢰할 수 있는 답변을 제공합니다.</div>',
         unsafe_allow_html=True
