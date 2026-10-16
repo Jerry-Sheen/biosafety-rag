@@ -326,12 +326,23 @@ class PathogenRegistry:
         else:
             non_applicable_laws.append("《수산생물질병 관리법》")
 
+        # Highlight risk group and remarks in red bold for high visibility
+        if risk_group and str(risk_group).strip() not in ("해당없음", "해당사항 없음", "정보 없음", "nan", "none", "null", ""):
+            risk_group_display = risk_group if str(risk_group).startswith(":red[") else f":red[**{risk_group}**]"
+        else:
+            risk_group_display = risk_group
+
+        if remarks and str(remarks).strip() and str(remarks).lower() not in ("nan", "none", "null", ""):
+            remarks_display = str(remarks) if str(remarks).startswith(":red[") else f":red[**{remarks}**]"
+        else:
+            remarks_display = remarks
+
         step1_lines = [
             "### [1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황]",
             "",
             f"제공된 영구 벡터 DB 검색 결과에 따른 **{canonical_name}**의 생물체위험군 등급 및 법적 규제 속성 현황은 다음과 같습니다. (가독성 표기 원칙에 따라 DB의 속성값은 '해당' 및 '해당사항 없음'으로 명확하게 변환하여 표기하였습니다.)",
             "",
-            f"* **생물체위험군 분류**: {risk_group}",
+            f"* **생물체위험군 분류**: {risk_group_display}",
             f"* **감염병예방법(고위험병원체)**: {':red[**해당**]' if is_high_risk else '해당사항 없음'}",
             f"* **감염병예방법(생물테러감염병병원체)**: {':red[**해당**]' if is_bioterror else '해당사항 없음'}",
             f"* **유전자변형생물체법(국가관리대상병원체)**: {':red[**해당**]' if is_lmo else '해당사항 없음'}",
@@ -344,7 +355,7 @@ class PathogenRegistry:
             f"* **수산생물질병관리법**: {':red[**해당**]' if is_aquatic else '해당사항 없음'}",
         ]
         if remarks:
-            step1_lines.append(f"* **비고**: {remarks}")
+            step1_lines.append(f"* **비고**: {remarks_display}")
         step1_lines.append("")
         step1_lines.append("---")
         step1_lines.append("")

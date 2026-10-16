@@ -621,7 +621,7 @@ def run_streamlit_app():
     st.markdown(
         '<div class="user-header" style="margin-bottom: 35px;">'
         '<span style="font-size:40px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;&nbsp;&nbsp;'
-        '<span style="font-size:25px; font-weight:bold; color:#1E3A8A;">안전한 생물 연구를 위한 규제 안내 나침반</span>'
+        '<span style="font-size:25px; font-weight:bold; color:#1E3A8A;">안전한 바이오 연구를 위한 규제 길잡이</span>'
         '</div>',
         unsafe_allow_html=True
     )
@@ -723,7 +723,7 @@ def run_streamlit_app():
     <body style="margin: 0; padding: 2px;">
     <div class="autocomplete-card">
         <div class="autocomplete-header">
-            <span class="autocomplete-title">🔍 병원균 실시간 자동완성 검색:</span>
+            <span class="autocomplete-title">🔍 병원균/바이러스 명칭 자동완성 검색:</span>
             <span class="autocomplete-guide">타이핑 시 아래로 자동완성 리스트가 펼쳐지며, 선택 시 채팅 입력창에 반영됩니다.</span>
         </div>
         <div class="input-row">

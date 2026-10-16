@@ -55,6 +55,7 @@ def test_yersinia_pestis_attributes(registry):
 
         # Check step1_markdown output
         md = info["step1_markdown"]
+        assert "* **생물체위험군 분류**: :red[**제3등급**]" in md
         assert "* **감염병예방법(고위험병원체)**: :red[**해당**]" in md
         assert "* **가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)**: :red[**해당**]" in md
         assert "* **수산생물질병관리법**: 해당사항 없음" in md
@@ -124,6 +125,21 @@ def test_parse_pathogen_chunk_fallback():
     assert res["is_vet_special"] is True
     assert res["is_veterinary"] is True
     assert "* **가축전염병예방법 및 수의생명자원관리규정(특별관리병원체)**: :red[**해당**]" in res["step1_markdown"]
+    assert "* **생물체위험군 분류**: :red[**제3등급**]" in res["step1_markdown"]
+
+
+def test_parse_pathogen_chunk_with_remarks():
+    """Test that remarks and risk group are formatted in red bold."""
+    sample_chunk = """
+    [병원균/항목: Sample Pathogen]
+    - 감염병예방법(고위험병원체): True
+    - 생물체위험군 분류: 제3등급
+    - 비고: 고위험성 병원균
+    """
+    res = parse_pathogen_chunk_attributes(sample_chunk)
+    assert res is not None
+    assert "* **생물체위험군 분류**: :red[**제3등급**]" in res["step1_markdown"]
+    assert "* **비고**: :red[**고위험성 병원균**]" in res["step1_markdown"]
 
 
 def test_law_search_precautions():
