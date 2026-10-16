@@ -17,6 +17,22 @@ from chromadb.errors import NotFoundError, InvalidArgumentError
 logger = get_secure_logger("vector_store")
 
 
+def _safe_is_file(p: Path) -> bool:
+    """Safely checks if path is an existing file without raising PermissionError or OSError."""
+    try:
+        return p.is_file()
+    except (OSError, PermissionError):
+        return False
+
+
+def _safe_file_size(p: Path) -> int:
+    """Safely returns file size, or -1 if inaccessible or not a regular file."""
+    try:
+        return p.stat().st_size
+    except (OSError, PermissionError):
+        return -1
+
+
 class PersistentVectorStore:
     """Manages persistent ChromaDB vector storage with incremental append support."""
 
@@ -35,21 +51,20 @@ class PersistentVectorStore:
                 Path.cwd() / "data" / "chroma_db",
                 Path("data/chroma_db").resolve(),
                 Path("/mount/src/biosafety-rag/data/chroma_db"),
-                Path("/app/data/chroma_db"),
             ]
             # Prioritize candidate directory containing chroma.sqlite3 with the largest file size (> 1MB)
             best_cand = None
             max_size = -1
             for cand in candidates:
-                db_file = cand / "chroma.sqlite3"
-                if db_file.is_file():
-                    try:
-                        sz = db_file.stat().st_size
+                try:
+                    db_file = cand / "chroma.sqlite3"
+                    if _safe_is_file(db_file):
+                        sz = _safe_file_size(db_file)
                         if sz > max_size:
                             max_size = sz
                             best_cand = cand
-                    except Exception:
-                        pass
+                except (OSError, PermissionError):
+                    continue
             if best_cand is not None and max_size > 100000:
                 logger.info(f"Resolved populated ChromaDB directory ({max_size:,} bytes): {best_cand}")
                 target_dir = best_cand
@@ -76,8 +91,9 @@ class PersistentVectorStore:
         try:
             if self.collection.count() == 0 and persist_directory is None:
                 for cand in candidates:
-                    if str(cand) != self.persist_directory and (cand / "chroma.sqlite3").is_file():
-                        try:
+                    try:
+                        db_file = cand / "chroma.sqlite3"
+                        if str(cand) != self.persist_directory and _safe_is_file(db_file):
                             temp_client = chromadb.PersistentClient(
                                 path=str(cand),
                                 settings=Settings(anonymized_telemetry=False)
@@ -89,8 +105,8 @@ class PersistentVectorStore:
                                 self.collection = temp_col
                                 self.persist_directory = str(cand)
                                 break
-                        except Exception:
-                            pass
+                    except Exception:
+                        pass
         except Exception as e:
             logger.warning(f"Fallback candidate scan notice: {e}")
 
@@ -457,10 +473,10 @@ class PersistentVectorStore:
                 Path.cwd() / "data" / "chroma_db",
                 Path("data/chroma_db").resolve(),
                 Path("/mount/src/biosafety-rag/data/chroma_db"),
-                Path("/app/data/chroma_db"),
             ]:
-                if (cand / "chroma.sqlite3").is_file():
-                    try:
+                try:
+                    db_file = cand / "chroma.sqlite3"
+                    if _safe_is_file(db_file):
                         temp_client = chromadb.PersistentClient(path=str(cand), settings=Settings(anonymized_telemetry=False))
                         temp_col = temp_client.get_collection(self.collection_name)
                         if temp_col.count() > 0:
@@ -470,8 +486,8 @@ class PersistentVectorStore:
                             self.persist_directory = str(cand)
                             count = temp_col.count()
                             break
-                    except Exception:
-                        pass
+                except Exception:
+                    pass
         if count == 0:
             return {
                 "total_chunks": 0,

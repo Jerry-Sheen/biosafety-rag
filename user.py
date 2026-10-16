@@ -94,10 +94,16 @@ def get_pathogen_keys_from_vector_store(source_name: str = "병원균(위험균)
 
     # 3. ChromaDB 직접 연결로 로드
     try:
+        def _check_db(p: Path) -> bool:
+            try:
+                return (p / "chroma.sqlite3").is_file()
+            except (OSError, PermissionError):
+                return False
+
         target_dir = Path(config.chroma_persist_dir)
-        if not (target_dir / "chroma.sqlite3").is_file():
-            for cand in [Path("data/chroma_db").resolve(), PROJECT_ROOT / "data" / "chroma_db"]:
-                if (cand / "chroma.sqlite3").is_file():
+        if not _check_db(target_dir):
+            for cand in [Path("data/chroma_db").resolve(), PROJECT_ROOT / "data" / "chroma_db", Path("/mount/src/biosafety-rag/data/chroma_db")]:
+                if _check_db(cand):
                     target_dir = cand
                     break
         client = chromadb.PersistentClient(path=str(target_dir))
