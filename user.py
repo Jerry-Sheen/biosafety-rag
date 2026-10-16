@@ -622,30 +622,32 @@ def run_streamlit_app():
     st.markdown(
         """
         <style>
-        /* 메인 컨테이너 상단 여백을 대폭 줄여 헤더와 기본 인사말을 화면 상단으로 올림 */
+        /* 메인 컨테이너 상단 여백: 헤더가 상단에서 1칸 정도 알맞게 내려오도록 조정 */
         .block-container {
-            padding-top: 1.0rem !important;
+            padding-top: 1.6rem !important;
             padding-bottom: 7.0rem !important;
         }
         header[data-testid="stHeader"] {
-            height: 1.2rem !important;
-            min-height: 1.2rem !important;
+            height: 1.5rem !important;
+            min-height: 1.5rem !important;
             background: transparent !important;
         }
-        .user-subheader { font-size: 30px; font-weight: bold; color: #4B5563; margin-top: -0.6rem; margin-bottom: 0.1rem; padding-left: 90px; }
-        .user-header { font-weight: 700; color: #1E3A8A; margin-top: 0; margin-bottom: 20px; }
+        .user-subheader { font-size: 25px; font-weight: bold; color: #4B5563; margin-top: 0.2rem; margin-bottom: 2px; padding-left: 90px; line-height: 1.2; }
+        .user-header { font-weight: 700; color: #1E3A8A; margin-top: 2px; margin-bottom: 20px; line-height: 1.2; }
         .user-desc { color: #4B5563; font-size: 1.0rem; margin-bottom: 1.5rem; }
         </style>
         """,
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="user-subheader" style="font-size:30px; font-weight:bold; padding-left:90px;">KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="user-header" style="margin-bottom: 20px;">'
-        '<span style="font-size:50px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;&nbsp;&nbsp;'
-        '<span style="font-size:30px; font-weight:bold; color:#1E3A8A;">안전한 바이오 연구를 위한 규제 길잡이</span>'
-        '</div>',
+        """
+        <div class="user-subheader" style="font-size:25px; font-weight:bold; padding-left:90px; margin-bottom: 2px;">KRIBB Biosafety AI Agent</div>
+        <div class="user-header" style="margin-top: 2px; margin-bottom: 20px;">
+            <span style="font-size:45px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;&nbsp;&nbsp;
+            <span style="font-size:28px; font-weight:bold; color:#1E3A8A;">안전한 바이오 연구를 위한 규제 길잡이</span>
+        </div>
+        """,
         unsafe_allow_html=True
     )
 
