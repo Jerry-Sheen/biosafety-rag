@@ -663,7 +663,7 @@ def run_streamlit_app():
                         st.text(src["text"][:400] + "...")
 
     # Load pathogen keys for autocomplete
-    pathogen_keys = _load_cached_pathogen_keys()
+    pathogen_keys = sorted(_load_cached_pathogen_keys(), key=lambda x: x.lower())
 
     # HTML5 Datalist Native Autocomplete Component
     import streamlit.components.v1 as components
@@ -703,7 +703,7 @@ def run_streamlit_app():
                     dock.innerHTML = `
                         <!-- Popup dropdown list sized to 2/3 of dock bar, popping upwards directly above dock -->
                         <div id="pathogen-dock-dropdown"
-                             style="display: none; position: absolute; left: 0; bottom: 100%; margin-bottom: 6px; width: 66.7%; min-width: 320px; max-width: 100%; max-height: 280px; overflow-y: auto; background: #ffffff; border: 1.5px solid #3B82F6; border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.22); z-index: 999999; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                             style="display: none; position: absolute; left: 0; bottom: 100%; margin-bottom: 6px; width: 66.7%; min-width: 320px; max-width: 100%; max-height: 320px; overflow-y: auto; background: #ffffff; border: 1.5px solid #3B82F6; border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.22); z-index: 999999; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                         </div>
                         <div style="background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 9px; padding: 6px 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 4px;">
@@ -759,18 +759,25 @@ def run_streamlit_app():
                         const q = (filterVal || '').trim().replace(/^['"]+|['"]+$/g, '').toLowerCase();
                         let matches;
                         if (!q) {{
-                            matches = allKeys.slice(0, 60);
+                            matches = allKeys;
                         }} else {{
                             const fullMatches = allKeys.filter(k => k.toLowerCase().includes(q));
-                            const prefix = fullMatches.filter(k => k.toLowerCase().startsWith(q)).sort();
-                            const others = fullMatches.filter(k => !k.toLowerCase().startsWith(q)).sort();
-                            matches = prefix.concat(others).slice(0, 60);
+                            const prefix = fullMatches.filter(k => k.toLowerCase().startsWith(q));
+                            const others = fullMatches.filter(k => !k.toLowerCase().startsWith(q));
+                            matches = prefix.concat(others);
                         }}
 
                         if (matches.length === 0) {{
                             dockDropdown.innerHTML = '<div style="padding: 10px 14px; color: #94A3B8; font-size: 12px;">일치하는 병원균 명칭이 없습니다.</div>';
                         }} else {{
                             dockDropdown.innerHTML = '';
+                            const headerRow = parentDoc.createElement('div');
+                            headerRow.style.cssText = 'padding: 6px 12px; background: #F1F5F9; color: #475569; font-size: 11px; font-weight: 600; border-bottom: 1px solid #E2E8F0; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center;';
+                            headerRow.innerHTML = q
+                                ? `<span>🔍 검색 결과</span><span style="color: #2563EB;">총 ${{matches.length}}개</span>`
+                                : `<span>📋 전체 병원균/바이러스 목록</span><span style="color: #2563EB;">총 ${{matches.length}}개</span>`;
+                            dockDropdown.appendChild(headerRow);
+
                             matches.forEach(item => {{
                                 const row = parentDoc.createElement('div');
                                 row.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #F1F5F9; color: #1E293B; line-height: 1.4; word-break: break-word; transition: background 0.1s;';
