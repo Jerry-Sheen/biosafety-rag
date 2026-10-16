@@ -541,8 +541,8 @@ def run_streamlit_app():
     st.markdown('<div class="user-subheader" style="font-size:21px; font-weight:bold; padding-left:50px;">KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="user-header" style="margin-bottom: 35px;">'
-        '<span style="font-size:30px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;&nbsp;&nbsp;'
-        '<span style="font-size:21px; font-weight:bold; color:#1E3A8A;">안전한 생물 연구를 위한 규제 안내 나침반</span>'
+        '<span style="font-size:40px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;&nbsp;&nbsp;'
+        '<span style="font-size:25px; font-weight:bold; color:#1E3A8A;">안전한 생물 연구를 위한 규제 안내 나침반</span>'
         '</div>',
         unsafe_allow_html=True
     )
