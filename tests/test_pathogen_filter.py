@@ -58,3 +58,10 @@ def test_filter_pathogen_keys_case_insensitive():
     assert filter_pathogen_keys("abr", sample) == ["Abrin (아브린)"]
     assert filter_pathogen_keys("ABR", sample) == ["Abrin (아브린)"]
     assert filter_pathogen_keys("abrc", sample) == []
+    # Test quoted inputs (e.g. user literally inputs 'ab' or 'abr')
+    assert filter_pathogen_keys("'ab'", sample) == sample
+    assert filter_pathogen_keys('"ab"', sample) == sample
+    assert filter_pathogen_keys("'abr'", sample) == ["Abrin (아브린)"]
+    assert filter_pathogen_keys("'abrc'", sample) == []
+    assert filter_pathogen_keys("a", sample) == sample
+    assert filter_pathogen_keys("e", sample) == sample[:2]

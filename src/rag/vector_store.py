@@ -44,9 +44,8 @@ class PersistentVectorStore:
 
         self.persist_directory = str(target_dir)
         self.collection_name = collection_name or config.chroma_collection_name
-        self.embedding_provider = embedding_provider or get_embedding_provider()
-        # Expected embedding dimension – may be inferred from provider or existing collection
-        self._expected_dimension: Optional[int] = getattr(self.embedding_provider, "dimension", None)
+        self._embedding_provider = embedding_provider
+        self._expected_dimension: Optional[int] = None
 
         logger.info(f"Connecting to ChromaDB at: {self.persist_directory}")
 
@@ -66,6 +65,12 @@ class PersistentVectorStore:
                 logger.info(f"Detected existing collection dimension: {self._expected_dimension}")
         except Exception as e:
             logger.warning(f"Notice: unable to infer existing collection dimension: {e}")
+
+    @property
+    def embedding_provider(self):
+        if self._embedding_provider is None:
+            self._embedding_provider = get_embedding_provider()
+        return self._embedding_provider
 
     # ---------------------------------------------------------------------
     # Internal helpers

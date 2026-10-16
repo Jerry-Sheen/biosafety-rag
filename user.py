@@ -47,12 +47,18 @@ from src.security.secrets_manager import sanitize_api_key
 def filter_pathogen_keys(query: str, keys: List[str]) -> List[str]:
     """
     입력된 글자(query)가 포함된 병원균 이름(Key 값)만 필터링합니다.
-    대소문자를 구분하지 않으며(case-insensitive), 빈 쿼리인 경우 빈 리스트를 반환합니다.
+    대소문자를 구분하지 않으며(case-insensitive), 입력값의 따옴표(' 또는 ")를 자동 정제합니다.
+    접두어 일치(prefix match) 항목을 우선 정렬하여 사용자 예시와 일치하도록 반환합니다.
     """
-    if not query or not query.strip():
+    if not query:
         return []
-    q = query.strip().lower()
-    return [k for k in keys if q in k.lower()]
+    q = query.strip().strip("'\"").strip().lower()
+    if not q or not keys:
+        return []
+    matches = [k for k in keys if q in k.lower()]
+    prefix_matches = sorted([k for k in matches if k.lower().startswith(q)], key=lambda x: x.lower())
+    other_matches = sorted([k for k in matches if not k.lower().startswith(q)], key=lambda x: x.lower())
+    return prefix_matches + other_matches
 
 
 def get_pathogen_keys_from_vector_store(source_name: str = "병원균(위험균) 종류 v3.json") -> List[str]:
@@ -323,7 +329,7 @@ def run_streamlit_app():
 
 
 
-# Set page config before any other Streamlit calls
+    # Set page config safely (safe if already set by app.py)
     try:
         st.set_page_config(
             page_title="SafeBio Navigator",
@@ -331,9 +337,9 @@ def run_streamlit_app():
             layout="wide",
             initial_sidebar_state="expanded",
         )
-    except Exception as e:
-        st.error(f"📛 페이지 설정 오류: {e}")
-        st.stop()
+    except Exception:
+        pass
+
     # Import core modules with error handling
     try:
         from src.rag.vector_store import PersistentVectorStore
@@ -342,8 +348,10 @@ def run_streamlit_app():
         st.error('❌ 필수 모듈 로드 실패')
         st.error(traceback.format_exc())
         st.stop()
+
     # Initialize sessions store directory
-    sessions_dir = Path(__file__).resolve().parent / "data" / "chat_sessions"
+    from pathlib import Path
+    sessions_dir = PROJECT_ROOT / "data" / "chat_sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
 
     def _save_session(session_id: str, messages: list):
@@ -406,26 +414,21 @@ def run_streamlit_app():
             }
         ]
 
-    # Initialize current session if not set
+    # Initialize current session if not set (clean fresh chat by default)
     if "current_session_id" not in st.session_state or "user_messages" not in st.session_state:
-        existing = _list_sessions()
-        if existing:
-            # Load the most recent session directly so continuing conversation stays in this session!
-            st.session_state.current_session_id = existing[0]["id"]
-            st.session_state.user_messages = existing[0]["messages"]
-        else:
-            import datetime
-            st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            st.session_state.user_messages = _default_messages()
+        import datetime
+        st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        st.session_state.user_messages = _default_messages()
+
+    # Fast pathogen keys loader cached without blocking on embedding model
+    @st.cache_data(show_spinner=False)
+    def _load_cached_pathogen_keys() -> List[str]:
+        return get_pathogen_keys_from_vector_store("병원균(위험균) 종류 v3.json")
 
     # Initialize vector store with st.cache_resource to prevent OOM crash
     @st.cache_resource(show_spinner="지식 베이스(ChromaDB)를 연결하는 중...")
     def _get_vector_store():
         return PersistentVectorStore()
-
-    @st.cache_data(show_spinner=False)
-    def _load_cached_pathogen_keys(_vector_store) -> List[str]:
-        return _vector_store.get_pathogen_keys("병원균(위험균) 종류 v3.json")
 
     try:
         vector_store = _get_vector_store()
@@ -630,7 +633,7 @@ def run_streamlit_app():
     st.markdown(
         '<div class="user-header" style="margin-bottom: 35px;">'
         '<span style="font-size:40px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;&nbsp;&nbsp;'
-        '<span style="font-size:25px; font-weight:bold; color:#1E3A8A;">안전한 생물 연구를 위한 규제 안내 나침반</span>'
+        '<span style="font-size:25px; font-weight:bold; color:#1E3A8A;">안전한 바이오 연구를 위한 규제 안내 나침반</span>'
         '</div>',
         unsafe_allow_html=True
     )
@@ -639,7 +642,11 @@ def run_streamlit_app():
     # Display conversation messages in main container
     for msg in st.session_state.user_messages:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            content = msg.get("content", "")
+            if content.startswith("[") and content.endswith("]"):
+                st.code(content, language="json")
+            else:
+                st.markdown(content)
             if msg.get("sources"):
                 with st.expander("🔍 참고 출처 및 컨텍스트", expanded=False):
                     for idx, src in enumerate(msg["sources"]):
@@ -652,20 +659,30 @@ def run_streamlit_app():
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        if is_key_filter_mode:
+        current_api_key = rag_engine.gemini_api_key if rag_engine.llm_provider == "gemini" else rag_engine.openai_api_key
+        # Check if this input should trigger pathogen key filtering:
+        # 1) When user is in key filtering mode (default)
+        # 2) Or when user typed a short character/keyword query (e.g. 'ab', 'abr', 'a', etc.)
+        # 3) Or when no LLM API key is configured
+        clean_prompt = prompt.strip().strip("'\"").strip()
+        is_short_filter = (len(clean_prompt) <= 15 and not any(p in prompt for p in ["알려줘", "설명해줘", "규제", "법령", "어떻게"]))
+        should_filter = is_key_filter_mode or is_short_filter or (not current_api_key)
+
+        if should_filter:
             with st.chat_message("assistant"):
                 # 영구 벡터 DB에 저장된 "병원균(위험균) 종류 v3.json" 파일에서
                 # 해당 글자가 포함된 병원균 이름(Key 값)만 필터링하여 출력
-                pathogen_keys = _load_cached_pathogen_keys(vector_store)
+                pathogen_keys = _load_cached_pathogen_keys()
                 filtered_keys = filter_pathogen_keys(prompt, pathogen_keys)
                 response_content = json.dumps(filtered_keys, ensure_ascii=False)
-                st.markdown(response_content)
+                st.code(response_content, language="json")
 
             st.session_state.user_messages.append({
                 "role": "assistant",
                 "content": response_content,
             })
             _save_session(st.session_state.current_session_id, st.session_state.user_messages)
+            st.rerun()
         else:
             # Check API key configuration before running RAG search
             current_api_key = rag_engine.gemini_api_key if rag_engine.llm_provider == "gemini" else rag_engine.openai_api_key
