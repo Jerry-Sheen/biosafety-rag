@@ -299,7 +299,6 @@ class LawSearchClient:
             for item, desc in law.get("items", {}).items():
                 lines.append(f"  * [{item}]: {desc}")
             lines.append("- 해당 법률에 따른 실무 가이드 절차:")
-            lines.append("  * [필수 안내사항]: - **안내사항 : 아래 실무 가이드 절차는 참고만 하시기 바라며, 실무 절차 관련 문의는 정책지원실 담당자(김성혜)에게 연락해 주시기 바랍니다.**")
             pg = law.get("practical_guide", {})
             if pg:
                 lines.append(f"  * 접수/신고 포털: {pg.get('system_name')} ({pg.get('system_url')})")

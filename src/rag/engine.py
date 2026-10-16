@@ -288,24 +288,24 @@ PRACTICAL_GUIDE_NOTICE = "- **안내사항 : 아래 실무 가이드 절차는 �
 
 def inject_practical_guide_notice(text: str) -> str:
     """
-    답변 중 '2. 실무 가이드 절차' 소제목 바로 아래에
-    한 칸 띄운 후 안내사항 문구가 볼드체로 누락 없이 항상 표기되도록 보장합니다.
+    답변 중 '2. 실무 가이드 절차' 소제목 바로 아래에 단 1개의 안내사항만
+    볼드체로 남기고, 연달아 나타나거나 중복된 모든 안내문구는 깔끔하게 삭제합니다.
     """
     if not text:
         return text
 
-    # 만약 볼드체 없이 들어간 이전 안내문구가 있다면 볼드체로 자동 승격
-    unbolded = "- 안내사항 : 아래 실무 가이드 절차는 참고만 하시기 바라며, 실무 절차 관련 문의는 정책지원실 담당자(김성혜)에게 연락해 주시기 바랍니다."
-    if unbolded in text and PRACTICAL_GUIDE_NOTICE not in text:
-        text = text.replace(unbolded, PRACTICAL_GUIDE_NOTICE)
+    # 김성혜 안내사항 패턴 (볼드체, 하이픈, 띄어쓰기 등 모든 중복 변형 매칭)
+    # 예: "- **안내사항 : ... 김성혜 ...**", "안내사항: ... 김성혜 ...", "- 안내사항 : ... 김성혜 ..." 등
+    notice_pattern = re.compile(
+        r"[ \t]*(?:-\s*)?(?:\*\*)?[ \t]*안내사항[ \t]*:[ \t]*아래\s*실무\s*가이드\s*절차는\s*참고만\s*하시기\s*바라며[^\n]*김성혜[^\n]*(?:\*\*)?[ \t]*\n?",
+        re.MULTILINE
+    )
 
-    # 이미 볼드체 안내사항이 포함되어 있다면 중복 삽입하지 않음
-    if PRACTICAL_GUIDE_NOTICE in text:
-        return text
+    # 1. 텍스트 전체에서 이미 존재하는 모든 안내문구를 일단 깨끗하게 제거
+    cleaned_text = notice_pattern.sub("", text)
 
-    # '2. 실무 가이드 절차' 또는 '실무 가이드 절차' 패턴 매칭
-    # 헤더 뒤에 한 칸 띄우고(빈 줄) 볼드체 안내사항 삽입
-    pattern = re.compile(
+    # 2. '2. 실무 가이드 절차' 또는 '실무 가이드 절차' 헤더를 찾아서 바로 아래에 1개씩만 삽입
+    header_pattern = re.compile(
         r"((?:#{1,4}\s*)?(?:\d+\.\s*)?실무\s*가이드\s*절차[^\n]*\n)",
         re.MULTILINE
     )
@@ -314,8 +314,13 @@ def inject_practical_guide_notice(text: str) -> str:
         header_line = match.group(1).rstrip()
         return f"{header_line}\n\n{PRACTICAL_GUIDE_NOTICE}\n"
 
-    new_text, count = pattern.subn(_replace_header, text)
-    return new_text if count > 0 else text
+    result, count = header_pattern.subn(_replace_header, cleaned_text)
+    if count == 0 and notice_pattern.search(text):
+        result = f"{PRACTICAL_GUIDE_NOTICE}\n\n{cleaned_text}"
+
+    # 불필요한 연속 3줄 이상의 개행 정리
+    result = re.sub(r"\n{3,}", "\n\n", result)
+    return result
 
 
 class ConversationalRAGEngine:
