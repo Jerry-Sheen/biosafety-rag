@@ -32,7 +32,7 @@ SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.
 당신의 답변은 반드시 바로 아래의 [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]부터 시작해야 합니다.
 
 [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차 작성 규칙]
-- 1단계에서 '해당'으로 확인된 모든 적용 법률(예: 《감염병의 예방 및 관리에 관한 법률》, 《화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률》, 《유전자변형생물체의 국가간 이동 등에 관한 법률》, 《가축전염병 예방법》 등)에 대해 빠짐없이 각각 독립된 하위 섹션(### [법률명])을 나누어 작성하세요.
+- 1단계에서 '해당'으로 확인된 모든 적용 법률(예: 《감염병의 예방 및 관리에 관한 법률》, 《화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률》, 《유전자변형생물체의 국가간 이동 등에 관한 법률》, 《가축전염병 예방법》, 《수산생물질병 관리법》 등)에 대해 빠짐없이 각각 독립된 하위 섹션(### [법률명])을 나누어 작성하세요.
 - 적용되는 각 법률마다 반드시 아래의 3대 카테고리를 순서대로 구성하여 작성해야 합니다:
   1. 8대 필수 항목별 규제 요건
      (1. 분리신고 ~ 8. 인도신고를 하나도 빠짐없이 순서대로 설명. 해당 법률에서 특정 항목 규정이 없는 경우 반드시 '해당없음'과 이유 명시)
@@ -42,7 +42,7 @@ SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.
      (형사처벌, 양벌 규정 등 벌칙과 행정처분 내용, 보관 및 운송 규정, 위험물질 취급 제한 등 연구자가 반드시 숙지해야 할 주의사항을 작성하여 항상 포함할 것. 해당사항이 없을 경우 반드시 '해당사항 없음'이라고 명시)
 
 [작성 주의사항]
-- 모델 자체의 편향된 상식으로 법률을 임의로 누락하거나 '해당없음'으로 왜곡하지 마십시오. 1단계에서 '해당'으로 명시된 법률은 2단계에서도 반드시 독립된 법률 섹션을 포함해야 합니다.
+- 모델 자체의 편향된 상식으로 법률을 임의로 누락하거나 '해당없음'으로 왜곡하지 마십시오. 1단계에서 '해당'으로 명시된 법률은 2단계에서도 반드시 독립된 법률 섹션을 포함해야 합니다. 특히 《수산생물질병 관리법》은 해양수산부(국립수산물품질관리원) 소관이며, 제1~3종 수산생물전염병 원인체에 대해 연구용 수입허가(법 제24조), 수입검역(제27조), 병원체 분리신고(제13조), 이동제한(제15조), 살처분·폐기(제16조/제17조) 등의 엄격한 규제가 적용되므로 8대 항목에 이를 구체적으로 명시해야 합니다.
 - 법제처 웹사이트의 최신 법령(조항 번호, 시행일자)을 반영하여 핵심 내용을 알기 쉽게 요약하세요. 법령 원문을 그대로 복사하지 마세요.
 - 적용되는 법률들을 하나로 뭉뚱그려 설명하지 말고, 반드시 법률별로 각각 8대 항목, 실무 가이드 절차, 주의사항을 명확하게 분리하여 작성해야 합니다.
 
@@ -188,6 +188,35 @@ def parse_pathogen_chunk_attributes(chunk_text: str) -> Optional[Dict[str, Any]]
 
     step1_markdown = "\n".join(step1_lines)
 
+    applicable_laws = []
+    non_applicable_laws = []
+    if is_high_risk:
+        applicable_laws.append("《감염병의 예방 및 관리에 관한 법률》 (고위험병원체)")
+    elif is_bioterror:
+        applicable_laws.append("《감염병의 예방 및 관리에 관한 법률》 (생물테러감염병병원체)")
+    else:
+        non_applicable_laws.append("《감염병의 예방 및 관리에 관한 법률》")
+
+    if is_bioweapon:
+        applicable_laws.append("《화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률》 (생물작용제)")
+    else:
+        non_applicable_laws.append("《화학무기ㆍ생물무기의 금지 및 규제 법률》")
+
+    if is_lmo:
+        applicable_laws.append("《유전자변형생물체의 국가간 이동 등에 관한 법률》 (국가관리대상병원체)")
+    else:
+        non_applicable_laws.append("《유전자변형생물체의 국가간 이동 등에 관한 법률》")
+
+    if is_veterinary:
+        applicable_laws.append("《가축전염병 예방법》")
+    else:
+        non_applicable_laws.append("《가축전염병 예방법》")
+
+    if is_aquatic:
+        applicable_laws.append("《수산생물질병 관리법》")
+    else:
+        non_applicable_laws.append("《수산생물질병 관리법》")
+
     return {
         "pathogen_name": pathogen_name,
         "is_high_risk": is_high_risk,
@@ -203,6 +232,8 @@ def parse_pathogen_chunk_attributes(chunk_text: str) -> Optional[Dict[str, Any]]
         "is_aquatic": is_aquatic,
         "risk_group": risk_group,
         "remarks": remarks,
+        "applicable_laws": applicable_laws,
+        "non_applicable_laws": non_applicable_laws,
         "step1_markdown": step1_markdown,
         "display_text": step1_markdown,
         "raw_attributes": raw_attrs,
@@ -417,6 +448,7 @@ class ConversationalRAGEngine:
             is_high_risk = pathogen_info["is_high_risk"]
             is_lmo = pathogen_info["is_lmo"]
             is_veterinary = pathogen_info["is_veterinary"]
+            is_aquatic = pathogen_info.get("is_aquatic", False)
             official_attributes_block = (
                 "================================================================================\n"
                 "[★ 영구 벡터 DB에서 직접 확인된 1단계 공식 규제 속성 현황 (100% 신뢰 기준 데이터 - 절대 수정/누락 금지)]\n"
@@ -428,6 +460,7 @@ class ConversationalRAGEngine:
             is_high_risk = any(k in full_text_corpus for k in ["고위험병원체", "감염병"]) or (": True" in full_text_corpus and "감염병예방법" in full_text_corpus)
             is_lmo = any(k in full_text_corpus for k in ["유전자변형", "LMO"]) or (": True" in full_text_corpus and "유전자변형생물체법" in full_text_corpus)
             is_veterinary = any(k in full_text_corpus for k in ["가축전염병", "수의생명자원", "가축병전염", "특별관리병원체"]) or (": True" in full_text_corpus and "특별관리병원체" in full_text_corpus)
+            is_aquatic = any(k in full_text_corpus for k in ["수산생물질병", "수산생물", "수산전염병"]) or (": True" in full_text_corpus and "수산생물질병관리법" in full_text_corpus)
             official_attributes_block = ""
 
         # Step 4: Law.go.kr real-time search & statutory provision mapping
@@ -443,6 +476,7 @@ class ConversationalRAGEngine:
                 "is_high_risk": is_high_risk,
                 "is_lmo": is_lmo,
                 "is_veterinary": is_veterinary,
+                "is_aquatic": is_aquatic,
             }
         )
         law_context_str = self.law_search_client.format_law_context_for_prompt(law_data)
