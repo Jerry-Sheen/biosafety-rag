@@ -44,6 +44,81 @@ from config import config
 from src.security.secrets_manager import sanitize_api_key
 
 
+def filter_pathogen_keys(query: str, keys: List[str]) -> List[str]:
+    """
+    입력된 글자(query)가 포함된 병원균 이름(Key 값)만 필터링합니다.
+    대소문자를 구분하지 않으며(case-insensitive), 입력값의 따옴표(' 또는 ")를 자동 정제합니다.
+    접두어 일치(prefix match) 항목을 우선 정렬하여 반환합니다.
+    """
+    if not query:
+        return []
+    q = query.strip().strip("'\"").strip().lower()
+    if not q or not keys:
+        return []
+    matches = [k for k in keys if q in k.lower()]
+    prefix_matches = sorted([k for k in matches if k.lower().startswith(q)], key=lambda x: x.lower())
+    other_matches = sorted([k for k in matches if not k.lower().startswith(q)], key=lambda x: x.lower())
+    return prefix_matches + other_matches
+
+
+def get_pathogen_keys_from_vector_store(source_name: str = "병원균(위험균) 종류 v3.json") -> List[str]:
+    """
+    영구 벡터 DB(ChromaDB)에 저장된 특정 JSON 문서 청크들로부터
+    병원균 이름(Key 값) 목록을 추출하여 반환합니다.
+    ChromaDB 클라이언트를 직접 사용하여 즉각 로드합니다.
+    """
+    import re
+    import json
+    import chromadb
+
+    # 1. ChromaDB 직접 연결로 즉각 로드
+    try:
+        target_dir = Path(config.chroma_persist_dir)
+        if not (target_dir / "chroma.sqlite3").is_file():
+            for cand in [Path("data/chroma_db").resolve(), PROJECT_ROOT / "data" / "chroma_db"]:
+                if (cand / "chroma.sqlite3").is_file():
+                    target_dir = cand
+                    break
+        client = chromadb.PersistentClient(path=str(target_dir))
+        col = client.get_collection(config.chroma_collection_name)
+        res = col.get(where={"source": source_name}, include=["documents"])
+        docs = res.get("documents", [])
+        pattern = re.compile(r'\[병원균/항목:\s*(.*?)(?=\]\s*\r?\n\s*-)', re.DOTALL)
+        keys = []
+        for d in docs:
+            for k in pattern.findall(d):
+                kc = k.strip()
+                if kc and kc not in keys:
+                    keys.append(kc)
+        if keys:
+            return keys
+    except Exception:
+        pass
+
+    # 2. PersistentVectorStore 객체 경유 fallback
+    try:
+        from src.rag.vector_store import PersistentVectorStore
+        vs = PersistentVectorStore()
+        keys = vs.get_pathogen_keys(source_name)
+        if keys:
+            return keys
+    except Exception:
+        pass
+
+    # 3. 로컬 JSON 파일 fallback
+    json_path = PROJECT_ROOT / "data" / "uploads" / source_name
+    if json_path.is_file():
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return list(data.keys())
+        except Exception:
+            pass
+
+    return []
+
+
 def run_check_ocr():
     """Validates OCR installation and environment configuration."""
     from parsers.ocr_parser import (
@@ -254,7 +329,7 @@ def run_streamlit_app():
 
 
 
-# Set page config before any other Streamlit calls
+    # Set page config before any other Streamlit calls (safe if already set by app.py)
     try:
         st.set_page_config(
             page_title="SafeBio Navigator",
@@ -262,9 +337,8 @@ def run_streamlit_app():
             layout="wide",
             initial_sidebar_state="expanded",
         )
-    except Exception as e:
-        st.error(f"📛 페이지 설정 오류: {e}")
-        st.stop()
+    except Exception:
+        pass
     # Import core modules with error handling
     try:
         from src.rag.vector_store import PersistentVectorStore
@@ -274,7 +348,7 @@ def run_streamlit_app():
         st.error(traceback.format_exc())
         st.stop()
     # Initialize sessions store directory
-    sessions_dir = Path(__file__).resolve().parent / "data" / "chat_sessions"
+    sessions_dir = PROJECT_ROOT / "data" / "chat_sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
 
     def _save_session(session_id: str, messages: list):
@@ -348,6 +422,11 @@ def run_streamlit_app():
             import datetime
             st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
             st.session_state.user_messages = _default_messages()
+
+    # Fast pathogen keys loader cached without blocking on embedding model
+    @st.cache_data(show_spinner=False)
+    def _load_cached_pathogen_keys() -> List[str]:
+        return get_pathogen_keys_from_vector_store("병원균(위험균) 종류 v3.json")
 
     # Initialize vector store with st.cache_resource to prevent OOM crash
     @st.cache_resource(show_spinner="지식 베이스(ChromaDB)를 연결하는 중...")
@@ -558,6 +637,219 @@ def run_streamlit_app():
                         st.markdown(f"**[{idx+1}] {src['metadata'].get('source', '문서')}** (유사도: `{src.get('similarity', 0.0):.2f}`)")
                         st.text(src["text"][:400] + "...")
 
+    # Load pathogen keys for autocomplete
+    pathogen_keys = _load_cached_pathogen_keys()
+
+    # HTML5 Datalist Native Autocomplete Component
+    import streamlit.components.v1 as components
+    import html as html_lib
+
+    options_html = "\n".join([f'<option value="{html_lib.escape(k)}">' for k in pathogen_keys])
+    keys_json = json.dumps(pathogen_keys, ensure_ascii=False)
+
+    autocomplete_component_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+    * {{
+        box-sizing: border-box;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }}
+    .autocomplete-card {{
+        background: #F8FAFC;
+        border: 1.5px solid #CBD5E1;
+        border-radius: 10px;
+        padding: 9px 14px;
+        margin: 4px 0 8px 0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }}
+    .autocomplete-header {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+    }}
+    .autocomplete-title {{
+        font-size: 13px;
+        font-weight: 700;
+        color: #1E3A8A;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }}
+    .autocomplete-guide {{
+        font-size: 11px;
+        color: #64748B;
+    }}
+    .input-row {{
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }}
+    .datalist-input {{
+        flex: 1;
+        padding: 8px 12px;
+        font-size: 14px;
+        border: 1.5px solid #3B82F6;
+        border-radius: 7px;
+        outline: none;
+        background: #FFFFFF;
+        color: #0F172A;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }}
+    .datalist-input:focus {{
+        border-color: #1D4ED8;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }}
+    .btn-apply {{
+        background-color: #2563EB;
+        color: #FFFFFF;
+        border: none;
+        border-radius: 7px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.15s;
+    }}
+    .btn-apply:hover {{
+        background-color: #1D4ED8;
+    }}
+    </style>
+    </head>
+    <body style="margin: 0; padding: 2px;">
+    <div class="autocomplete-card">
+        <div class="autocomplete-header">
+            <span class="autocomplete-title">🔍 병원균 실시간 자동완성 검색:</span>
+            <span class="autocomplete-guide">타이핑 시 아래로 자동완성 리스트가 펼쳐지며, 선택 시 채팅 입력창에 반영됩니다.</span>
+        </div>
+        <div class="input-row">
+            <input type="text" list="pathogen-native-datalist" id="pathogen-input-field" class="datalist-input"
+                   placeholder="병원균 이름 입력 (예: ab, abr, a, e, 아브린)..." autocomplete="off" />
+            <datalist id="pathogen-native-datalist">
+                {options_html}
+            </datalist>
+            <button id="btn-insert-chat" class="btn-apply">채팅창에 적용</button>
+        </div>
+    </div>
+
+    <script>
+    (function() {{
+        const allKeys = {keys_json};
+        const searchInput = document.getElementById('pathogen-input-field');
+        const applyBtn = document.getElementById('btn-insert-chat');
+
+        function insertIntoParentChat(value) {{
+            if (!value) return;
+            try {{
+                const parentDoc = window.parent.document;
+                const ta = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
+                if (ta) {{
+                    const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value')?.set ||
+                                   Object.getOwnPropertyDescriptor(ta, 'value')?.set;
+                    if (setter) {{
+                        setter.call(ta, value);
+                    }} else {{
+                        ta.value = value;
+                    }}
+                    ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    ta.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    ta.focus();
+                }}
+            }} catch (err) {{
+                console.error("Chat input update error:", err);
+            }}
+        }}
+
+        searchInput.addEventListener('change', (e) => {{
+            insertIntoParentChat(e.target.value);
+        }});
+        searchInput.addEventListener('keydown', (e) => {{
+            if (e.key === 'Enter') {{
+                insertIntoParentChat(e.target.value);
+            }}
+        }});
+        applyBtn.addEventListener('click', () => {{
+            insertIntoParentChat(searchInput.value);
+        }});
+
+        // Live autocomplete dropdown attached directly to parent stChatInputTextArea
+        try {{
+            const parentDoc = window.parent.document;
+            let dropdown = parentDoc.getElementById('st-pathogen-dropdown');
+            if (!dropdown) {{
+                dropdown = parentDoc.createElement('div');
+                dropdown.id = 'st-pathogen-dropdown';
+                dropdown.style.cssText = 'position:fixed; display:none; max-height:220px; overflow-y:auto; background:#ffffff; border:1.5px solid #3B82F6; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.18); z-index:999999; font-size:13px; font-family:sans-serif; width:calc(100% - 40px); max-width:800px;';
+                parentDoc.body.appendChild(dropdown);
+            }}
+
+            const attachListener = () => {{
+                const ta = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
+                if (!ta || ta._pathogenAttached) return;
+                ta._pathogenAttached = true;
+
+                ta.addEventListener('input', (e) => {{
+                    const rawVal = e.target.value || '';
+                    const q = rawVal.trim().replace(/^['"]+|['"]+$/g, '').toLowerCase();
+                    if (!q) {{
+                        dropdown.style.display = 'none';
+                        return;
+                    }}
+
+                    const matches = allKeys.filter(k => k.toLowerCase().includes(q));
+                    const prefix = matches.filter(k => k.toLowerCase().startsWith(q)).sort();
+                    const others = matches.filter(k => !k.toLowerCase().startsWith(q)).sort();
+                    const filtered = prefix.concat(others);
+
+                    if (filtered.length === 0) {{
+                        dropdown.style.display = 'none';
+                        return;
+                    }}
+
+                    dropdown.innerHTML = '';
+                    filtered.slice(0, 30).forEach(item => {{
+                        const row = parentDoc.createElement('div');
+                        row.style.cssText = 'padding:8px 12px; cursor:pointer; border-bottom:1px solid #F1F5F9; color:#1E293B;';
+                        row.textContent = item;
+                        row.addEventListener('mouseover', () => {{ row.style.background = '#EFF6FF'; row.style.color = '#1D4ED8'; }});
+                        row.addEventListener('mouseout', () => {{ row.style.background = '#FFFFFF'; row.style.color = '#1E293B'; }});
+                        row.addEventListener('mousedown', (ev) => {{
+                            ev.preventDefault();
+                            insertIntoParentChat(item);
+                            dropdown.style.display = 'none';
+                        }});
+                        dropdown.appendChild(row);
+                    }});
+
+                    const rect = ta.getBoundingClientRect();
+                    dropdown.style.left = rect.left + 'px';
+                    dropdown.style.width = Math.min(rect.width, 700) + 'px';
+                    dropdown.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+                    dropdown.style.display = 'block';
+                }});
+
+                ta.addEventListener('blur', () => {{
+                    setTimeout(() => {{ dropdown.style.display = 'none'; }}, 250);
+                }});
+            }};
+
+            attachListener();
+            setInterval(attachListener, 1000);
+        }} catch(err) {{
+            console.error("Parent textarea dropdown attachment error:", err);
+        }}
+    }})();
+    </script>
+    </body>
+    </html>
+    """
+
+    components.html(autocomplete_component_html, height=85)
+
     # Chat input box
     if prompt := st.chat_input("병원균, 위험균, 생물작용제 및 독소에 대한 질문을 입력하세요..."):
         # Check API key configuration before running RAG search
@@ -698,6 +990,11 @@ def main():
         type=str,
         help="OpenAI API 키를 직접 지정합니다. .env에 설정되지 않은 경우 사용합니다."
     )
+    parser.add_argument(
+        "--filter",
+        type=str,
+        help="영구 벡터 DB의 '병원균(위험균) 종류 v3.json'에서 특정 글자가 포함된 병원균 이름(Key 값)을 필터링하여 JSON 형식으로 출력합니다."
+    )
 
 # NOTE: The Streamlit UI is now launched explicitly via the CLI `--ui` flag or
 # by running `streamlit run admin.py`. The automatic detection of a Streamlit
@@ -711,7 +1008,11 @@ def main():
     args, _ = parser.parse_known_args()
 
     # Determine which mode to run based on provided arguments.
-    if args.check_ocr:
+    if args.filter is not None:
+        keys = get_pathogen_keys_from_vector_store("병원균(위험균) 종류 v3.json")
+        filtered = filter_pathogen_keys(args.filter, keys)
+        print(json.dumps(filtered, ensure_ascii=False))
+    elif args.check_ocr:
         run_check_ocr()
     elif args.check_gemini:
         run_check_gemini()
@@ -724,7 +1025,7 @@ def main():
         import subprocess
         subprocess.run(["streamlit", "run", "user.py"])
     # If no specific flags are set, launch the Streamlit UI by default.
-    elif not any([args.check_ocr, args.check_gemini, args.list_models, args.input, args.ui]):
+    elif not any([args.check_ocr, args.check_gemini, args.list_models, args.input, args.ui, args.filter is not None]):
         run_streamlit_app()
     else:
         parser.print_help()
