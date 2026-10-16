@@ -530,7 +530,7 @@ def run_streamlit_app():
     st.markdown(
         """
         <style>
-        .user-subheader { font-size: 17px; color: #4B5563; margin-bottom: 0.2rem; }
+        .user-subheader { font-size: 21px; font-weight: 700; color: #4B5563; margin-bottom: 0.2rem; padding-left: 42px; }
         .user-header { font-weight: 700; color: #1E3A8A; margin-bottom: 0.2rem; }
         .user-desc { color: #4B5563; font-size: 1.0rem; margin-bottom: 1.5rem; }
         </style>
@@ -538,11 +538,11 @@ def run_streamlit_app():
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="user-subheader" style="font-size:21px; font-weight:bold">   KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-subheader" style="font-size:21px; font-weight:bold; padding-left:42px;">KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="user-header">'
-        '<span style="font-size:30px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator</span>, '
-        '<span style="font-size:21px; font-weight:bold; color:#1E3A8A;">  안전한 생물 연구를 위한 규제 안내 나침반</span>'
+        '<span style="font-size:30px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;'
+        '<span style="font-size:21px; font-weight:bold; color:#1E3A8A;">안전한 생물 연구를 위한 규제 안내 나침반</span>'
         '</div>',
         unsafe_allow_html=True
     )
