@@ -694,29 +694,29 @@ def run_streamlit_app():
                 if (!dock) {{
                     dock = parentDoc.createElement('div');
                     dock.id = 'st-pathogen-bottom-bar';
-                    dock.style.cssText = 'width: 100%; margin-bottom: 6px; padding: 0; box-sizing: border-box;';
+                    dock.style.cssText = 'width: 66.7%; max-width: 100%; min-width: 320px; margin-bottom: 6px; margin-left: 0; margin-right: auto; padding: 0; box-sizing: border-box;';
 
                     const optionsHtml = allKeys.map(k => '<option value="' + k.replace(/"/g, '&quot;') + '">').join('');
 
                     dock.innerHTML = `
                         <div style="background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 9px; padding: 6px 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 4px;">
                                 <span style="font-size: 13px; font-weight: 700; color: #1E3A8A; display: flex; align-items: center; gap: 6px;">
                                     🔍 병원균/바이러스 명칭 자동완성 검색:
                                 </span>
                                 <span style="font-size: 11px; color: #64748B;">
-                                    타이핑 시 아래로 자동완성 리스트가 펼쳐지며, 선택 시 채팅 입력창에 반영됩니다.
+                                    타이핑 시 자동완성 리스트 표시 및 선택 시 채팅창에 반영
                                 </span>
                             </div>
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <input type="text" list="pathogen-dock-datalist" id="pathogen-dock-input"
                                        placeholder="병원균 이름 입력 (예: ab, abr, a, e, 아브린)..." autocomplete="off"
-                                       style="flex: 1; padding: 6px 12px; font-size: 13px; border: 1.5px solid #3B82F6; border-radius: 6px; outline: none; background: #FFFFFF; color: #0F172A;" />
+                                       style="flex: 1; min-width: 0; padding: 6px 12px; font-size: 13px; border: 1.5px solid #3B82F6; border-radius: 6px; outline: none; background: #FFFFFF; color: #0F172A;" />
                                 <datalist id="pathogen-dock-datalist">
                                     ${{optionsHtml}}
                                 </datalist>
                                 <button id="btn-dock-apply"
-                                        style="background-color: #2563EB; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background-color 0.15s;">
+                                        style="background-color: #2563EB; color: #FFFFFF; border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background-color 0.15s; flex-shrink: 0;">
                                     채팅창에 적용
                                 </button>
                             </div>
@@ -758,10 +758,32 @@ def run_streamlit_app():
                     }});
                     dockBtn.addEventListener('mouseover', () => {{ dockBtn.style.backgroundColor = '#1D4ED8'; }});
                     dockBtn.addEventListener('mouseout', () => {{ dockBtn.style.backgroundColor = '#2563EB'; }});
+
+                    window.parent.addEventListener('resize', () => {{
+                        try {{
+                            const ci = parentDoc.querySelector('[data-testid="stChatInput"]');
+                            const dk = parentDoc.getElementById('st-pathogen-bottom-bar');
+                            if (ci && dk) {{
+                                const cw = ci.getBoundingClientRect().width || ci.offsetWidth;
+                                if (cw > 150) {{
+                                    dk.style.width = Math.round(cw * 2 / 3) + 'px';
+                                }}
+                            }}
+                        }} catch (e) {{}}
+                    }});
                 }} else {{
                     if (chatInput.parentElement && chatInput.previousElementSibling !== dock) {{
                         chatInput.parentElement.insertBefore(dock, chatInput);
                     }}
+                }}
+
+                // Keep dock width synchronized with 2/3 of chatInput
+                const chatWidth = chatInput.getBoundingClientRect().width || chatInput.offsetWidth;
+                if (chatWidth > 150) {{
+                    dock.style.width = Math.round(chatWidth * 2 / 3) + 'px';
+                    dock.style.maxWidth = '100%';
+                }} else {{
+                    dock.style.width = '66.7%';
                 }}
             }} catch (err) {{
                 console.warn("Pathogen dock attachment notice:", err);
