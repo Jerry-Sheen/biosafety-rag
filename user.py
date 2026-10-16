@@ -348,7 +348,7 @@ def run_streamlit_app():
     # Import core modules with error handling
     try:
         from src.rag.vector_store import PersistentVectorStore
-        from src.rag.engine import ConversationalRAGEngine
+        from src.rag.engine import ConversationalRAGEngine, inject_practical_guide_notice
     except Exception as e:
         st.error('❌ 필수 모듈 로드 실패')
         st.error(traceback.format_exc())
@@ -1052,6 +1052,7 @@ def run_streamlit_app():
                 full_response = "⚠️ 답변이 비어 있습니다. 모델이 해당 질문에 대한 응답을 생성하지 못했을 수 있습니다. 질문을 다르게 표현하거나 문서가 충분히 관련되어 있는지 확인해 주세요."
 
             if not has_error:
+                full_response = inject_practical_guide_notice(full_response)
                 status_box.update(label="✅ 답변 생성 완료", state="complete", expanded=False)
             response_placeholder.markdown(full_response)
 
