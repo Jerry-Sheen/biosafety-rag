@@ -452,3 +452,48 @@ class PersistentVectorStore:
         )
         self._expected_dimension = getattr(self.embedding_provider, "dimension", None)
 
+    def get_pathogen_keys(self, source_name: str = "병원균(위험균) 종류 v3.json") -> List[str]:
+        """
+        영구 벡터 DB(ChromaDB)에 저장된 특정 JSON 문서 청크들로부터
+        병원균 이름(Key 값) 목록을 추출하여 반환합니다.
+        """
+        import re
+        try:
+            res = self.collection.get(
+                where={"source": source_name},
+                include=["documents"]
+            )
+            docs = res.get("documents", [])
+            if docs:
+                pattern = re.compile(r'\[병원균/항목:\s*(.*?)(?=\]\s*\r?\n\s*-)', re.DOTALL)
+                keys = []
+                for d in docs:
+                    for k in pattern.findall(d):
+                        k_clean = k.strip()
+                        if k_clean and k_clean not in keys:
+                            keys.append(k_clean)
+                if keys:
+                    return keys
+        except Exception as e:
+            logger.warning(f"Error fetching pathogen keys from vector store for '{source_name}': {e}")
+
+        # Fallback to local json file if vector store retrieval fails
+        try:
+            candidates = [
+                Path("data/uploads") / source_name,
+                Path(__file__).resolve().parent.parent.parent / "data" / "uploads" / source_name,
+                Path("data/reference") / source_name,
+            ]
+            for cand in candidates:
+                if cand.is_file():
+                    import json
+                    with open(cand, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if isinstance(data, dict):
+                            return list(data.keys())
+        except Exception as e:
+            logger.warning(f"Fallback local json read error: {e}")
+
+        return []
+
+

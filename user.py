@@ -44,6 +44,75 @@ from config import config
 from src.security.secrets_manager import sanitize_api_key
 
 
+def filter_pathogen_keys(query: str, keys: List[str]) -> List[str]:
+    """
+    입력된 글자(query)가 포함된 병원균 이름(Key 값)만 필터링합니다.
+    대소문자를 구분하지 않으며(case-insensitive), 빈 쿼리인 경우 빈 리스트를 반환합니다.
+    """
+    if not query or not query.strip():
+        return []
+    q = query.strip().lower()
+    return [k for k in keys if q in k.lower()]
+
+
+def get_pathogen_keys_from_vector_store(source_name: str = "병원균(위험균) 종류 v3.json") -> List[str]:
+    """
+    영구 벡터 DB(ChromaDB)에 저장된 특정 JSON 문서 청크들로부터
+    병원균 이름(Key 값) 목록을 추출하여 반환합니다.
+    임베딩 모델 불필요 로딩을 방지하기 위해 ChromaDB 클라이언트를 직접 사용하여 즉각 반환합니다.
+    """
+    import re
+    import json
+    import chromadb
+
+    # 1. ChromaDB 직접 연결로 즉각 로드 (0.1초 이내)
+    try:
+        target_dir = Path(config.chroma_persist_dir)
+        if not (target_dir / "chroma.sqlite3").is_file():
+            for cand in [Path("data/chroma_db").resolve(), PROJECT_ROOT / "data" / "chroma_db"]:
+                if (cand / "chroma.sqlite3").is_file():
+                    target_dir = cand
+                    break
+        client = chromadb.PersistentClient(path=str(target_dir))
+        col = client.get_collection(config.chroma_collection_name)
+        res = col.get(where={"source": source_name}, include=["documents"])
+        docs = res.get("documents", [])
+        pattern = re.compile(r'\[병원균/항목:\s*(.*?)(?=\]\s*\r?\n\s*-)', re.DOTALL)
+        keys = []
+        for d in docs:
+            for k in pattern.findall(d):
+                kc = k.strip()
+                if kc and kc not in keys:
+                    keys.append(kc)
+        if keys:
+            return keys
+    except Exception:
+        pass
+
+    # 2. PersistentVectorStore 객체 경유 fallback
+    try:
+        from src.rag.vector_store import PersistentVectorStore
+        vs = PersistentVectorStore()
+        keys = vs.get_pathogen_keys(source_name)
+        if keys:
+            return keys
+    except Exception:
+        pass
+
+    # 3. 로컬 JSON 파일 fallback
+    json_path = PROJECT_ROOT / "data" / "uploads" / source_name
+    if json_path.is_file():
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return list(data.keys())
+        except Exception:
+            pass
+
+    return []
+
+
 def run_check_ocr():
     """Validates OCR installation and environment configuration."""
     from parsers.ocr_parser import (
@@ -333,7 +402,7 @@ def run_streamlit_app():
         return [
             {
                 "role": "assistant",
-                "content": "안녕하세요! KRIBB 생물안전 관리 AI 에이전트입니다. 병원균, 위험균, 생물작용제 및 독소 관련 법/제도, 신고 절차, 주의 사항 등에 관해 궁금한 점을 질문해 주세요."
+                "content": "안녕하세요! SafeBio Navigator입니다.\n채팅창에 특정 글자(예: `ab`, `abr`, `a`, `e`)를 입력하시면, 영구 벡터 DB에 저장된 **'병원균(위험균) 종류 v3.json'** 파일에서 해당 글자가 포함된 병원균 이름(Key 값)만 필터링하여 출력합니다."
             }
         ]
 
@@ -353,6 +422,10 @@ def run_streamlit_app():
     @st.cache_resource(show_spinner="지식 베이스(ChromaDB)를 연결하는 중...")
     def _get_vector_store():
         return PersistentVectorStore()
+
+    @st.cache_data(show_spinner=False)
+    def _load_cached_pathogen_keys(_vector_store) -> List[str]:
+        return _vector_store.get_pathogen_keys("병원균(위험균) 종류 v3.json")
 
     try:
         vector_store = _get_vector_store()
@@ -379,6 +452,21 @@ def run_streamlit_app():
             st.session_state.current_session_id = f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
             st.session_state.user_messages = _default_messages()
             st.rerun()
+
+        st.divider()
+
+        # 동작 모드 선택 (기본: 병원균 키 필터링)
+        st.markdown("### 🧭 동작 모드")
+        mode_option = st.radio(
+            "채팅창 동작 모드:",
+            options=[
+                "🔍 병원균 키 필터링 (기본)",
+                "💬 AI 지식 질의응답 (RAG 엔진)"
+            ],
+            index=0,
+            help="병원균 키 필터링 모드는 영구 벡터 DB에 저장된 '병원균(위험균) 종류 v3.json' 파일에서 입력한 글자가 포함된 병원균 이름(Key)만 필터링하여 출력합니다."
+        )
+        is_key_filter_mode = "키 필터링" in mode_option
 
         st.divider()
 
@@ -559,83 +647,97 @@ def run_streamlit_app():
                         st.text(src["text"][:400] + "...")
 
     # Chat input box
-    if prompt := st.chat_input("병원균, 위험균, 생물작용제 및 독소에 대한 질문을 입력하세요..."):
-        # Check API key configuration before running RAG search
-        current_api_key = rag_engine.gemini_api_key if rag_engine.llm_provider == "gemini" else rag_engine.openai_api_key
-        if not current_api_key or not current_api_key.strip():
-            st.session_state.user_messages.append({"role": "user", "content": prompt})
-            provider_label = "Google Gemini" if rag_engine.llm_provider == "gemini" else "OpenAI"
-            key_url = "https://aistudio.google.com/app/apikey" if rag_engine.llm_provider == "gemini" else "https://platform.openai.com/api-keys"
-            st.session_state.user_messages.append({
-                "role": "assistant",
-                "content": (
-                    f"⚠️ **{provider_label} API 키가 설정되지 않았습니다.**\n\n"
-                    f"답변을 생성하기 위해서는 사용자의 API 키가 필요합니다.\n\n"
-                    f"1. 좌측 사이드바의 **'🔑 {provider_label} API 키 입력'** 란에 본인의 API 키를 입력해 주세요.\n"
-                    f"2. 아직 키가 없으시다면 [👉 {provider_label} API 키 발급받기]({key_url})에서 무료로 발급받으실 수 있습니다.\n\n"
-                    f"*(※ 입력하신 API 키는 브라우저 세션 중에만 임시 사용되며, 서버에 일절 저장되지 않습니다.)*"
-                )
-            })
-            _save_session(st.session_state.current_session_id, st.session_state.user_messages)
-            st.rerun()
-
+    if prompt := st.chat_input("특정 글자(예: ab, abr, a, e) 또는 질문을 입력하세요..."):
         st.session_state.user_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        with st.chat_message("assistant"):
-            status_box = st.status("🔍 관련 문서 검색 중...", expanded=True)
-            response_placeholder = st.empty()
-            full_response = ""
-            retrieved_sources = []
-            has_error = False
-
-            # 기본 스트리밍 생성기 호출
-            stream_gen = rag_engine.generate_streaming_response(
-                query=prompt,
-                chat_history=st.session_state.user_messages[:-1],
-                top_k=top_k,
-            )
-            for event in stream_gen:
-                event_type = event.get("type")
-                if event_type == "status":
-                    status_box.update(label=f"⏳ {event.get('message')}", state="running")
-                elif event_type == "sources":
-                    retrieved_sources = event.get("content", [])
-                elif event_type == "token":
-                    token = event.get("content") or ""
-                    full_response += token
-                    response_placeholder.markdown(full_response + " ▌")
-                elif event_type == "error":
-                    err_msg = event.get('content', '')
-                    status_box.update(label=f"⚠️ 오류 발생: {err_msg}", state="error", expanded=True)
-                    full_response += f"\n\n{err_msg}"
-                    response_placeholder.markdown(full_response)
-                    has_error = True
-                    break
-
-            if not has_error and not full_response.strip():
-                status_box.update(label="⚠️ 답변이 비어 있습니다. 선택한 모델에서 결과를 생성하지 못했습니다.", state="error", expanded=True)
-                full_response = "⚠️ 답변이 비어 있습니다. 모델이 해당 질문에 대한 응답을 생성하지 못했을 수 있습니다. 질문을 다르게 표현하거나 문서가 충분히 관련되어 있는지 확인해 주세요."
-
-            if not has_error:
-                status_box.update(label="✅ 답변 생성 완료", state="complete", expanded=False)
-            response_placeholder.markdown(full_response)
-
-            if not has_error and retrieved_sources:
-                with st.expander("🔍 참고 문서 청크", expanded=False):
-                    for idx, src in enumerate(retrieved_sources):
-                        st.markdown(f"**[{idx+1}] {src['metadata'].get('source', '문서')}** (유사도: `{src.get('similarity',0.0):.2f}`)")
-                        st.text(src['text'][:400] + "...")
+        if is_key_filter_mode:
+            with st.chat_message("assistant"):
+                # 영구 벡터 DB에 저장된 "병원균(위험균) 종류 v3.json" 파일에서
+                # 해당 글자가 포함된 병원균 이름(Key 값)만 필터링하여 출력
+                pathogen_keys = _load_cached_pathogen_keys(vector_store)
+                filtered_keys = filter_pathogen_keys(prompt, pathogen_keys)
+                response_content = json.dumps(filtered_keys, ensure_ascii=False)
+                st.markdown(response_content)
 
             st.session_state.user_messages.append({
                 "role": "assistant",
-                "content": full_response,
-                "sources": retrieved_sources,
+                "content": response_content,
             })
-
-            # Save to current session file
             _save_session(st.session_state.current_session_id, st.session_state.user_messages)
+        else:
+            # Check API key configuration before running RAG search
+            current_api_key = rag_engine.gemini_api_key if rag_engine.llm_provider == "gemini" else rag_engine.openai_api_key
+            if not current_api_key or not current_api_key.strip():
+                provider_label = "Google Gemini" if rag_engine.llm_provider == "gemini" else "OpenAI"
+                key_url = "https://aistudio.google.com/app/apikey" if rag_engine.llm_provider == "gemini" else "https://platform.openai.com/api-keys"
+                st.session_state.user_messages.append({
+                    "role": "assistant",
+                    "content": (
+                        f"⚠️ **{provider_label} API 키가 설정되지 않았습니다.**\n\n"
+                        f"답변을 생성하기 위해서는 사용자의 API 키가 필요합니다.\n\n"
+                        f"1. 좌측 사이드바의 **'🔑 {provider_label} API 키 입력'** 란에 본인의 API 키를 입력해 주세요.\n"
+                        f"2. 아직 키가 없으시다면 [👉 {provider_label} API 키 발급받기]({key_url})에서 무료로 발급받으실 수 있습니다.\n\n"
+                        f"*(※ 입력하신 API 키는 브라우저 세션 중에만 임시 사용되며, 서버에 일절 저장되지 않습니다.)*"
+                    )
+                })
+                _save_session(st.session_state.current_session_id, st.session_state.user_messages)
+                st.rerun()
+
+            with st.chat_message("assistant"):
+                status_box = st.status("🔍 관련 문서 검색 중...", expanded=True)
+                response_placeholder = st.empty()
+                full_response = ""
+                retrieved_sources = []
+                has_error = False
+
+                # 기본 스트리밍 생성기 호출
+                stream_gen = rag_engine.generate_streaming_response(
+                    query=prompt,
+                    chat_history=st.session_state.user_messages[:-1],
+                    top_k=top_k,
+                )
+                for event in stream_gen:
+                    event_type = event.get("type")
+                    if event_type == "status":
+                        status_box.update(label=f"⏳ {event.get('message')}", state="running")
+                    elif event_type == "sources":
+                        retrieved_sources = event.get("content", [])
+                    elif event_type == "token":
+                        token = event.get("content") or ""
+                        full_response += token
+                        response_placeholder.markdown(full_response + " ▌")
+                    elif event_type == "error":
+                        err_msg = event.get('content', '')
+                        status_box.update(label=f"⚠️ 오류 발생: {err_msg}", state="error", expanded=True)
+                        full_response += f"\n\n{err_msg}"
+                        response_placeholder.markdown(full_response)
+                        has_error = True
+                        break
+
+                if not has_error and not full_response.strip():
+                    status_box.update(label="⚠️ 답변이 비어 있습니다. 선택한 모델에서 결과를 생성하지 못했습니다.", state="error", expanded=True)
+                    full_response = "⚠️ 답변이 비어 있습니다. 모델이 해당 질문에 대한 응답을 생성하지 못했을 수 있습니다. 질문을 다르게 표현하거나 문서가 충분히 관련되어 있는지 확인해 주세요."
+
+                if not has_error:
+                    status_box.update(label="✅ 답변 생성 완료", state="complete", expanded=False)
+                response_placeholder.markdown(full_response)
+
+                if not has_error and retrieved_sources:
+                    with st.expander("🔍 참고 문서 청크", expanded=False):
+                        for idx, src in enumerate(retrieved_sources):
+                            st.markdown(f"**[{idx+1}] {src['metadata'].get('source', '문서')}** (유사도: `{src.get('similarity',0.0):.2f}`)")
+                            st.text(src['text'][:400] + "...")
+
+                st.session_state.user_messages.append({
+                    "role": "assistant",
+                    "content": full_response,
+                    "sources": retrieved_sources,
+                })
+
+                # Save to current session file
+                _save_session(st.session_state.current_session_id, st.session_state.user_messages)
             
 
 
@@ -692,6 +794,11 @@ def main():
         action="store_true",
         help="Streamlit 대화형 웹 UI를 실행합니다."
     )
+    parser.add_argument(
+        "--filter",
+        type=str,
+        help="영구 벡터 DB의 '병원균(위험균) 종류 v3.json'에서 특정 글자가 포함된 병원균 이름(Key 값)을 필터링하여 JSON 형식으로 출력합니다."
+    )
     # OpenAI API 키를 직접 지정합니다.
     parser.add_argument(
         "--openai-key",
@@ -711,7 +818,11 @@ def main():
     args, _ = parser.parse_known_args()
 
     # Determine which mode to run based on provided arguments.
-    if args.check_ocr:
+    if args.filter is not None:
+        keys = get_pathogen_keys_from_vector_store("병원균(위험균) 종류 v3.json")
+        filtered = filter_pathogen_keys(args.filter, keys)
+        print(json.dumps(filtered, ensure_ascii=False))
+    elif args.check_ocr:
         run_check_ocr()
     elif args.check_gemini:
         run_check_gemini()
@@ -724,7 +835,7 @@ def main():
         import subprocess
         subprocess.run(["streamlit", "run", "user.py"])
     # If no specific flags are set, launch the Streamlit UI by default.
-    elif not any([args.check_ocr, args.check_gemini, args.list_models, args.input, args.ui]):
+    elif not any([args.check_ocr, args.check_gemini, args.list_models, args.input, args.ui, args.filter is not None]):
         run_streamlit_app()
     else:
         parser.print_help()
