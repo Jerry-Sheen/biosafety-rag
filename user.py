@@ -691,12 +691,20 @@ def run_streamlit_app():
                 if (!chatInput || !chatInput.parentElement) return;
 
                 let dock = parentDoc.getElementById('st-pathogen-bottom-bar');
-                if (!dock) {{
-                    dock = parentDoc.createElement('div');
-                    dock.id = 'st-pathogen-bottom-bar';
-                    dock.style.cssText = 'width: 100%; margin-bottom: 6px; padding: 0; box-sizing: border-box;';
+                const needsBuild = !dock || !dock.querySelector('#pathogen-dock-dropdown');
 
+                if (needsBuild) {{
+                    if (!dock) {{
+                        dock = parentDoc.createElement('div');
+                        dock.id = 'st-pathogen-bottom-bar';
+                        chatInput.parentElement.insertBefore(dock, chatInput);
+                    }}
+                    dock.style.cssText = 'width: 100%; margin-bottom: 6px; padding: 0; box-sizing: border-box; position: relative;';
                     dock.innerHTML = `
+                        <!-- Popup dropdown list sized to 2/3 of dock bar, popping upwards directly above dock -->
+                        <div id="pathogen-dock-dropdown"
+                             style="display: none; position: absolute; left: 0; bottom: 100%; margin-bottom: 6px; width: 66.7%; min-width: 320px; max-width: 100%; max-height: 280px; overflow-y: auto; background: #ffffff; border: 1.5px solid #3B82F6; border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.22); z-index: 999999; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                        </div>
                         <div style="background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 9px; padding: 6px 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 4px;">
                                 <span style="font-size: 13px; font-weight: 700; color: #1E3A8A; display: flex; align-items: center; gap: 6px;">
@@ -706,7 +714,7 @@ def run_streamlit_app():
                                     클릭 또는 타이핑 시 병원균 목록이 표시되며, 선택 시 채팅창에 반영됩니다.
                                 </span>
                             </div>
-                            <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
                                 <input type="text" id="pathogen-dock-input"
                                        placeholder="병원균 이름 입력 (예: ab, abr, a, e, 아브린)..." autocomplete="off"
                                        style="flex: 1; min-width: 0; padding: 6px 12px; font-size: 13px; border: 1.5px solid #3B82F6; border-radius: 6px; outline: none; background: #FFFFFF; color: #0F172A;" />
@@ -717,20 +725,18 @@ def run_streamlit_app():
                             </div>
                         </div>
                     `;
-
-                    chatInput.parentElement.insertBefore(dock, chatInput);
-
-                    const dockInput = dock.querySelector('#pathogen-dock-input');
-                    const dockBtn = dock.querySelector('#btn-dock-apply');
-
-                    // Standalone custom dropdown popup sized to 2/3 of dock bar width
-                    let dockDropdown = parentDoc.getElementById('pathogen-dock-dropdown');
-                    if (!dockDropdown) {{
-                        dockDropdown = parentDoc.createElement('div');
-                        dockDropdown.id = 'pathogen-dock-dropdown';
-                        dockDropdown.style.cssText = 'position: fixed; display: none; max-height: 280px; overflow-y: auto; background: #ffffff; border: 1.5px solid #3B82F6; border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18); z-index: 999999; font-size: 13px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
-                        parentDoc.body.appendChild(dockDropdown);
+                }} else {{
+                    if (chatInput.parentElement && chatInput.previousElementSibling !== dock) {{
+                        chatInput.parentElement.insertBefore(dock, chatInput);
                     }}
+                }}
+
+                const dockInput = dock.querySelector('#pathogen-dock-input');
+                const dockBtn = dock.querySelector('#btn-dock-apply');
+                const dockDropdown = dock.querySelector('#pathogen-dock-dropdown');
+
+                if (dockInput && !dockInput._eventsAttached) {{
+                    dockInput._eventsAttached = true;
 
                     function applyValue(val) {{
                         if (!val) return;
@@ -749,7 +755,7 @@ def run_streamlit_app():
                         }}
                     }}
 
-                    function showDropdown(filterVal = '') {{
+                    function renderDropdown(filterVal = '') {{
                         const q = (filterVal || '').trim().replace(/^['"]+|['"]+$/g, '').toLowerCase();
                         let matches;
                         if (!q) {{
@@ -780,72 +786,36 @@ def run_streamlit_app():
                                 dockDropdown.appendChild(row);
                             }});
                         }}
-
-                        // Calculate size to be precisely 2/3 of the dock bar width
-                        const dockRect = dock.getBoundingClientRect();
-                        const inputRect = dockInput.getBoundingClientRect();
-                        const targetWidth = Math.max(320, Math.round(dockRect.width * 2 / 3));
-
-                        dockDropdown.style.width = targetWidth + 'px';
-                        dockDropdown.style.left = inputRect.left + 'px';
-
-                        const spaceBelow = window.innerHeight - inputRect.bottom;
-                        if (spaceBelow >= 300) {{
-                            dockDropdown.style.top = (inputRect.bottom + 4) + 'px';
-                            dockDropdown.style.bottom = 'auto';
-                        }} else {{
-                            dockDropdown.style.bottom = (window.innerHeight - inputRect.top + 6) + 'px';
-                            dockDropdown.style.top = 'auto';
-                        }}
                         dockDropdown.style.display = 'block';
                     }}
 
-                    dockInput.addEventListener('focus', () => showDropdown(dockInput.value));
-                    dockInput.addEventListener('click', () => showDropdown(dockInput.value));
-                    dockInput.addEventListener('input', (e) => showDropdown(e.target.value));
+                    dockInput.addEventListener('focus', () => renderDropdown(dockInput.value));
+                    dockInput.addEventListener('click', () => renderDropdown(dockInput.value));
+                    dockInput.addEventListener('input', (e) => renderDropdown(e.target.value));
 
                     dockInput.addEventListener('keydown', (e) => {{
                         if (e.key === 'Enter') {{
                             e.preventDefault();
                             applyValue(dockInput.value);
-                            if (dockDropdown) dockDropdown.style.display = 'none';
+                            dockDropdown.style.display = 'none';
                         }} else if (e.key === 'Escape') {{
-                            if (dockDropdown) dockDropdown.style.display = 'none';
+                            dockDropdown.style.display = 'none';
                         }}
                     }});
 
                     dockBtn.addEventListener('click', (e) => {{
                         e.preventDefault();
                         applyValue(dockInput.value);
-                        if (dockDropdown) dockDropdown.style.display = 'none';
+                        dockDropdown.style.display = 'none';
                     }});
                     dockBtn.addEventListener('mouseover', () => {{ dockBtn.style.backgroundColor = '#1D4ED8'; }});
                     dockBtn.addEventListener('mouseout', () => {{ dockBtn.style.backgroundColor = '#2563EB'; }});
 
                     parentDoc.addEventListener('mousedown', (e) => {{
-                        if (dockDropdown && !dock.contains(e.target) && !dockDropdown.contains(e.target)) {{
+                        if (!dock.contains(e.target)) {{
                             dockDropdown.style.display = 'none';
                         }}
                     }});
-
-                    window.parent.addEventListener('resize', () => {{
-                        try {{
-                            const ci = parentDoc.querySelector('[data-testid="stChatInput"]');
-                            const dk = parentDoc.getElementById('st-pathogen-bottom-bar');
-                            const dd = parentDoc.getElementById('pathogen-dock-dropdown');
-                            const inp = parentDoc.getElementById('pathogen-dock-input');
-                            if (dk && dd && inp && dd.style.display !== 'none') {{
-                                const dkRect = dk.getBoundingClientRect();
-                                const inpRect = inp.getBoundingClientRect();
-                                dd.style.width = Math.max(320, Math.round(dkRect.width * 2 / 3)) + 'px';
-                                dd.style.left = inpRect.left + 'px';
-                            }}
-                        }} catch (e) {{}}
-                    }});
-                }} else {{
-                    if (chatInput.parentElement && chatInput.previousElementSibling !== dock) {{
-                        chatInput.parentElement.insertBefore(dock, chatInput);
-                    }}
                 }}
             }} catch (err) {{
                 console.warn("Pathogen dock attachment notice:", err);
