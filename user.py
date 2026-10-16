@@ -737,6 +737,40 @@ def run_streamlit_app():
 
                 if (dockInput && !dockInput._eventsAttached) {{
                     dockInput._eventsAttached = true;
+                    let selectedIndex = -1;
+
+                    function getDropdownItems() {{
+                        return dockDropdown ? dockDropdown.querySelectorAll('.dock-dropdown-item') : [];
+                    }}
+
+                    function updateSelection(newIdx, scrollIntoView = true) {{
+                        const items = getDropdownItems();
+                        if (!items.length) {{
+                            selectedIndex = -1;
+                            return;
+                        }}
+
+                        items.forEach((el, idx) => {{
+                            if (idx === newIdx) {{
+                                el.style.backgroundColor = '#DBEAFE';
+                                el.style.color = '#1D4ED8';
+                                el.style.fontWeight = '600';
+                            }} else {{
+                                el.style.backgroundColor = '#FFFFFF';
+                                el.style.color = '#1E293B';
+                                el.style.fontWeight = 'normal';
+                            }}
+                        }});
+
+                        selectedIndex = newIdx;
+
+                        if (selectedIndex >= 0 && selectedIndex < items.length) {{
+                            const activeEl = items[selectedIndex];
+                            if (scrollIntoView) {{
+                                activeEl.scrollIntoView({{ block: 'nearest' }});
+                            }}
+                        }}
+                    }}
 
                     function applyValue(val) {{
                         if (!val) return;
@@ -756,6 +790,7 @@ def run_streamlit_app():
                     }}
 
                     function renderDropdown(filterVal = '') {{
+                        selectedIndex = -1;
                         const q = (filterVal || '').trim().replace(/^['"]+|['"]+$/g, '').toLowerCase();
                         let matches;
                         if (!q) {{
@@ -774,21 +809,25 @@ def run_streamlit_app():
                             const headerRow = parentDoc.createElement('div');
                             headerRow.style.cssText = 'padding: 6px 12px; background: #F1F5F9; color: #475569; font-size: 11px; font-weight: 600; border-bottom: 1px solid #E2E8F0; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center;';
                             headerRow.innerHTML = q
-                                ? `<span>🔍 검색 결과</span><span style="color: #2563EB;">총 ${{matches.length}}개</span>`
-                                : `<span>📋 전체 병원균/바이러스 목록</span><span style="color: #2563EB;">총 ${{matches.length}}개</span>`;
+                                ? `<span>🔍 검색 결과</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 클릭 선택)</span>`
+                                : `<span>📋 전체 병원균/바이러스 목록</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 클릭 선택)</span>`;
                             dockDropdown.appendChild(headerRow);
 
-                            matches.forEach(item => {{
+                            matches.forEach((item, idx) => {{
                                 const row = parentDoc.createElement('div');
+                                row.className = 'dock-dropdown-item';
+                                row.dataset.index = idx;
                                 row.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #F1F5F9; color: #1E293B; line-height: 1.4; word-break: break-word; transition: background 0.1s;';
                                 row.textContent = item;
-                                row.addEventListener('mouseover', () => {{ row.style.background = '#EFF6FF'; row.style.color = '#1D4ED8'; }});
-                                row.addEventListener('mouseout', () => {{ row.style.background = '#FFFFFF'; row.style.color = '#1E293B'; }});
+                                row.addEventListener('mouseover', () => {{
+                                    updateSelection(idx, false);
+                                }});
                                 row.addEventListener('mousedown', (ev) => {{
                                     ev.preventDefault();
                                     dockInput.value = item;
                                     applyValue(item);
                                     dockDropdown.style.display = 'none';
+                                    selectedIndex = -1;
                                 }});
                                 dockDropdown.appendChild(row);
                             }});
@@ -801,12 +840,45 @@ def run_streamlit_app():
                     dockInput.addEventListener('input', (e) => renderDropdown(e.target.value));
 
                     dockInput.addEventListener('keydown', (e) => {{
-                        if (e.key === 'Enter') {{
+                        const items = getDropdownItems();
+                        const isOpen = dockDropdown && dockDropdown.style.display !== 'none';
+
+                        if (e.key === 'ArrowDown') {{
                             e.preventDefault();
-                            applyValue(dockInput.value);
-                            dockDropdown.style.display = 'none';
+                            if (!isOpen) {{
+                                renderDropdown(dockInput.value);
+                                updateSelection(0, true);
+                            }} else if (items.length > 0) {{
+                                let next = selectedIndex + 1;
+                                if (next >= items.length) next = 0;
+                                updateSelection(next, true);
+                            }}
+                        }} else if (e.key === 'ArrowUp') {{
+                            e.preventDefault();
+                            if (!isOpen) {{
+                                renderDropdown(dockInput.value);
+                                updateSelection(items.length - 1, true);
+                            }} else if (items.length > 0) {{
+                                let prev = selectedIndex - 1;
+                                if (prev < 0) prev = items.length - 1;
+                                updateSelection(prev, true);
+                            }}
+                        }} else if (e.key === 'Enter') {{
+                            e.preventDefault();
+                            if (isOpen && selectedIndex >= 0 && selectedIndex < items.length) {{
+                                const chosen = items[selectedIndex].textContent;
+                                dockInput.value = chosen;
+                                applyValue(chosen);
+                                dockDropdown.style.display = 'none';
+                                selectedIndex = -1;
+                            }} else if (dockInput.value.trim()) {{
+                                applyValue(dockInput.value.trim());
+                                if (dockDropdown) dockDropdown.style.display = 'none';
+                                selectedIndex = -1;
+                            }}
                         }} else if (e.key === 'Escape') {{
-                            dockDropdown.style.display = 'none';
+                            if (dockDropdown) dockDropdown.style.display = 'none';
+                            selectedIndex = -1;
                         }}
                     }});
 
@@ -814,6 +886,7 @@ def run_streamlit_app():
                         e.preventDefault();
                         applyValue(dockInput.value);
                         dockDropdown.style.display = 'none';
+                        selectedIndex = -1;
                     }});
                     dockBtn.addEventListener('mouseover', () => {{ dockBtn.style.backgroundColor = '#1D4ED8'; }});
                     dockBtn.addEventListener('mouseout', () => {{ dockBtn.style.backgroundColor = '#2563EB'; }});
@@ -821,6 +894,7 @@ def run_streamlit_app():
                     parentDoc.addEventListener('mousedown', (e) => {{
                         if (!dock.contains(e.target)) {{
                             dockDropdown.style.display = 'none';
+                            selectedIndex = -1;
                         }}
                     }});
                 }}
