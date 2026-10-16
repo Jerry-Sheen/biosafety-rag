@@ -538,20 +538,15 @@ def run_streamlit_app():
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="user-subheader" style="font-size:17px;">- KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-subheader" style="font-size:21px; font-weight:bold">   KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="user-header">'
         '<span style="font-size:30px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator</span>, '
-        '<span style="font-size:21px; font-weight:bold; color:#1E3A8A;">안전한 생물 연구를 위한 규제 안내 나침반</span>'
+        '<span style="font-size:21px; font-weight:bold; color:#1E3A8A;">  안전한 생물 연구를 위한 규제 안내 나침반</span>'
         '</div>',
         unsafe_allow_html=True
     )
 
-
-    st.markdown(
-        '<div class="user-desc"> 생물안전 관련 문서, 법령, 고시, 지침을 바탕으로 정확하고 신뢰할 수 있는 답변을 제공합니다.</div>',
-        unsafe_allow_html=True
-    )
 
     # Display conversation messages in main container
     for msg in st.session_state.user_messages:
