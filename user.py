@@ -622,19 +622,29 @@ def run_streamlit_app():
     st.markdown(
         """
         <style>
-        .user-subheader { font-size: 21px; font-weight: 700; color: #4B5563; margin-bottom: 0.2rem; padding-left: 50px; }
-        .user-header { font-weight: 700; color: #1E3A8A; margin-bottom: 35px; }
+        /* 메인 컨테이너 상단 여백을 대폭 줄여 헤더와 기본 인사말을 화면 상단으로 올림 */
+        .block-container {
+            padding-top: 1.0rem !important;
+            padding-bottom: 7.0rem !important;
+        }
+        header[data-testid="stHeader"] {
+            height: 1.2rem !important;
+            min-height: 1.2rem !important;
+            background: transparent !important;
+        }
+        .user-subheader { font-size: 30px; font-weight: bold; color: #4B5563; margin-top: -0.6rem; margin-bottom: 0.1rem; padding-left: 90px; }
+        .user-header { font-weight: 700; color: #1E3A8A; margin-top: 0; margin-bottom: 20px; }
         .user-desc { color: #4B5563; font-size: 1.0rem; margin-bottom: 1.5rem; }
         </style>
         """,
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="user-subheader" style="font-size:21px; font-weight:bold; padding-left:70px;">KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="user-subheader" style="font-size:30px; font-weight:bold; padding-left:90px;">KRIBB Biosafety AI Agent</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="user-header" style="margin-bottom: 35px;">'
-        '<span style="font-size:40px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;&nbsp;&nbsp;'
-        '<span style="font-size:25px; font-weight:bold; color:#1E3A8A;">안전한 바이오 연구를 위한 규제 길잡이</span>'
+        '<div class="user-header" style="margin-bottom: 20px;">'
+        '<span style="font-size:50px; font-weight:bold; color:#1E3A8A;">🧭 SafeBio Navigator,</span>&nbsp;&nbsp;&nbsp;&nbsp;'
+        '<span style="font-size:30px; font-weight:bold; color:#1E3A8A;">안전한 바이오 연구를 위한 규제 길잡이</span>'
         '</div>',
         unsafe_allow_html=True
     )
@@ -670,19 +680,24 @@ def run_streamlit_app():
         box-sizing: border-box;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }}
+    body {{
+        margin: 0;
+        padding: 0;
+        background: transparent;
+    }}
     .autocomplete-card {{
         background: #F8FAFC;
         border: 1.5px solid #CBD5E1;
-        border-radius: 10px;
-        padding: 9px 14px;
-        margin: 4px 0 8px 0;
+        border-radius: 9px;
+        padding: 6px 12px;
+        margin: 0;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }}
     .autocomplete-header {{
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
     }}
     .autocomplete-title {{
         font-size: 13px;
@@ -703,10 +718,10 @@ def run_streamlit_app():
     }}
     .datalist-input {{
         flex: 1;
-        padding: 8px 12px;
-        font-size: 14px;
+        padding: 6px 12px;
+        font-size: 13px;
         border: 1.5px solid #3B82F6;
-        border-radius: 7px;
+        border-radius: 6px;
         outline: none;
         background: #FFFFFF;
         color: #0F172A;
@@ -720,9 +735,9 @@ def run_streamlit_app():
         background-color: #2563EB;
         color: #FFFFFF;
         border: none;
-        border-radius: 7px;
-        padding: 8px 16px;
-        font-size: 13px;
+        border-radius: 6px;
+        padding: 6px 14px;
+        font-size: 12px;
         font-weight: 600;
         cursor: pointer;
         white-space: nowrap;
@@ -733,7 +748,7 @@ def run_streamlit_app():
     }}
     </style>
     </head>
-    <body style="margin: 0; padding: 2px;">
+    <body>
     <div class="autocomplete-card">
         <div class="autocomplete-header">
             <span class="autocomplete-title">🔍 병원균/바이러스 명칭 자동완성 검색:</span>
@@ -754,6 +769,33 @@ def run_streamlit_app():
         const allKeys = {keys_json};
         const searchInput = document.getElementById('pathogen-input-field');
         const applyBtn = document.getElementById('btn-insert-chat');
+
+        // Dock autocomplete card directly above stChatInput in parent DOM
+        function dockAboveChatInput() {{
+            try {{
+                const parentDoc = window.parent.document;
+                const chatInput = parentDoc.querySelector('[data-testid="stChatInput"]');
+                const frame = window.frameElement;
+                if (!chatInput || !frame) return;
+
+                const container = frame.closest('.element-container') || frame.parentElement || frame;
+                const parent = chatInput.parentElement;
+                if (parent && chatInput.previousElementSibling !== container) {{
+                    parent.insertBefore(container, chatInput);
+                    container.style.width = '100%';
+                    container.style.margin = '0 0 4px 0';
+                    container.style.padding = '0';
+                }}
+            }} catch (err) {{
+                // cross-origin or framing restriction fallback
+            }}
+        }}
+
+        dockAboveChatInput();
+        setTimeout(dockAboveChatInput, 50);
+        setTimeout(dockAboveChatInput, 200);
+        setTimeout(dockAboveChatInput, 600);
+        setInterval(dockAboveChatInput, 1000);
 
         function insertIntoParentChat(value) {{
             if (!value) return;
@@ -861,7 +903,7 @@ def run_streamlit_app():
     </html>
     """
 
-    components.html(autocomplete_component_html, height=85)
+    components.html(autocomplete_component_html, height=75)
 
     # Chat input box
     if prompt := st.chat_input("병원균, 위험균, 생물작용제 및 독소에 대한 질문을 입력하세요..."):
