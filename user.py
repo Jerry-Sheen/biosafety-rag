@@ -71,7 +71,28 @@ def get_pathogen_keys_from_vector_store(source_name: str = "병원균(위험균)
     import json
     import chromadb
 
-    # 1. ChromaDB 직접 연결로 즉각 로드
+    # 1. 로컬 JSON 파일 직접 로드 (ChromaDB 락 충돌 방지 및 즉각 로드)
+    json_path = PROJECT_ROOT / "data" / "uploads" / source_name
+    if json_path.is_file():
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return list(data.keys())
+        except Exception:
+            pass
+
+    # 2. PersistentVectorStore 객체 경유
+    try:
+        from src.rag.vector_store import PersistentVectorStore
+        vs = PersistentVectorStore()
+        keys = vs.get_pathogen_keys(source_name)
+        if keys:
+            return keys
+    except Exception:
+        pass
+
+    # 3. ChromaDB 직접 연결로 로드
     try:
         target_dir = Path(config.chroma_persist_dir)
         if not (target_dir / "chroma.sqlite3").is_file():
@@ -94,27 +115,6 @@ def get_pathogen_keys_from_vector_store(source_name: str = "병원균(위험균)
             return keys
     except Exception:
         pass
-
-    # 2. PersistentVectorStore 객체 경유 fallback
-    try:
-        from src.rag.vector_store import PersistentVectorStore
-        vs = PersistentVectorStore()
-        keys = vs.get_pathogen_keys(source_name)
-        if keys:
-            return keys
-    except Exception:
-        pass
-
-    # 3. 로컬 JSON 파일 fallback
-    json_path = PROJECT_ROOT / "data" / "uploads" / source_name
-    if json_path.is_file():
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    return list(data.keys())
-        except Exception:
-            pass
 
     return []
 
@@ -556,6 +556,13 @@ def run_streamlit_app():
 
         st.divider()
         stats = vector_store.get_stats()
+        # Self-healing: if cached store reports 0 chunks, clear cache and reconnect immediately
+        if stats.get('total_chunks', 0) == 0:
+            st.cache_resource.clear()
+            from src.rag.vector_store import PersistentVectorStore
+            vector_store = PersistentVectorStore()
+            stats = vector_store.get_stats()
+
         st.markdown("### 📊 지식 베이스 현황")
         st.metric("총 색인 청크 수", f"{stats['total_chunks']:,} 개")
         st.metric("저장된 문서 수", f"{stats['unique_documents_count']} 권")

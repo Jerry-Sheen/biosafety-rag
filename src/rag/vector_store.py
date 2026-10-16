@@ -29,18 +29,32 @@ class PersistentVectorStore:
         if persist_directory is not None:
             target_dir = Path(persist_directory)
         else:
-            target_dir = Path(config.chroma_persist_dir)
-            if not (target_dir / "chroma.sqlite3").is_file():
-                candidates = [
-                    Path(__file__).resolve().parent.parent.parent / "data" / "chroma_db",
-                    Path.cwd() / "data" / "chroma_db",
-                    Path("data/chroma_db").resolve(),
-                ]
-                for cand in candidates:
-                    if (cand / "chroma.sqlite3").is_file():
-                        logger.info(f"Resolved ChromaDB directory via candidate search: {cand}")
-                        target_dir = cand
-                        break
+            candidates = [
+                Path(config.chroma_persist_dir),
+                Path(__file__).resolve().parent.parent.parent / "data" / "chroma_db",
+                Path.cwd() / "data" / "chroma_db",
+                Path("data/chroma_db").resolve(),
+                Path("/mount/src/biosafety-rag/data/chroma_db"),
+                Path("/app/data/chroma_db"),
+            ]
+            # Prioritize candidate directory containing chroma.sqlite3 with the largest file size (> 1MB)
+            best_cand = None
+            max_size = -1
+            for cand in candidates:
+                db_file = cand / "chroma.sqlite3"
+                if db_file.is_file():
+                    try:
+                        sz = db_file.stat().st_size
+                        if sz > max_size:
+                            max_size = sz
+                            best_cand = cand
+                    except Exception:
+                        pass
+            if best_cand is not None and max_size > 100000:
+                logger.info(f"Resolved populated ChromaDB directory ({max_size:,} bytes): {best_cand}")
+                target_dir = best_cand
+            else:
+                target_dir = Path(config.chroma_persist_dir)
 
         self.persist_directory = str(target_dir)
         self.collection_name = collection_name or config.chroma_collection_name
@@ -57,6 +71,29 @@ class PersistentVectorStore:
             name=self.collection_name,
             metadata={"hnsw:space": "cosine"},
         )
+
+        # Fallback check: if collection count is 0, check other candidates for populated collection
+        try:
+            if self.collection.count() == 0 and persist_directory is None:
+                for cand in candidates:
+                    if str(cand) != self.persist_directory and (cand / "chroma.sqlite3").is_file():
+                        try:
+                            temp_client = chromadb.PersistentClient(
+                                path=str(cand),
+                                settings=Settings(anonymized_telemetry=False)
+                            )
+                            temp_col = temp_client.get_collection(self.collection_name)
+                            if temp_col.count() > 0:
+                                logger.info(f"Recovered populated collection '{self.collection_name}' ({temp_col.count()} chunks) from: {cand}")
+                                self.client = temp_client
+                                self.collection = temp_col
+                                self.persist_directory = str(cand)
+                                break
+                        except Exception:
+                            pass
+        except Exception as e:
+            logger.warning(f"Fallback candidate scan notice: {e}")
+
         # If collection already contains data, infer its dimension
         try:
             if self.collection.count() > 0:
@@ -412,6 +449,29 @@ class PersistentVectorStore:
         except Exception as e:
             logger.warning(f"Collection count warning for '{self.collection_name}': {e}")
             count = 0
+        if count == 0:
+            # Recheck candidate paths if count returned 0
+            for cand in [
+                Path(config.chroma_persist_dir),
+                Path(__file__).resolve().parent.parent.parent / "data" / "chroma_db",
+                Path.cwd() / "data" / "chroma_db",
+                Path("data/chroma_db").resolve(),
+                Path("/mount/src/biosafety-rag/data/chroma_db"),
+                Path("/app/data/chroma_db"),
+            ]:
+                if (cand / "chroma.sqlite3").is_file():
+                    try:
+                        temp_client = chromadb.PersistentClient(path=str(cand), settings=Settings(anonymized_telemetry=False))
+                        temp_col = temp_client.get_collection(self.collection_name)
+                        if temp_col.count() > 0:
+                            logger.info(f"get_stats recovered collection from: {cand}")
+                            self.client = temp_client
+                            self.collection = temp_col
+                            self.persist_directory = str(cand)
+                            count = temp_col.count()
+                            break
+                    except Exception:
+                        pass
         if count == 0:
             return {
                 "total_chunks": 0,
