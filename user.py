@@ -737,26 +737,34 @@ def run_streamlit_app():
 
                 if (!dockInput || !dockBtn || !dockDropdown) return;
 
-                // Always rebind events with active iframe closures on every rerun/new chat
-                let selectedIndex = -1;
+                // Prevent periodic timer from resetting active selection while dropdown is in use
+                if (dockInput._boundWindow === window && dockDropdown.style.display !== 'none') {{
+                    return;
+                }}
+                dockInput._boundWindow = window;
+
+                let selectedIndex = parseInt(dockDropdown.dataset.selectedIndex || '-1', 10);
 
                 function getDropdownItems() {{
                     return dockDropdown ? dockDropdown.querySelectorAll('.dock-dropdown-item') : [];
                 }}
 
-                function updateSelection(newIdx, scrollIntoView = true) {{
+                function updateSelection(newIdx, scrollIntoView = true, syncInput = true) {{
                     const items = getDropdownItems();
                     if (!items.length) {{
                         selectedIndex = -1;
+                        if (dockDropdown) dockDropdown.dataset.selectedIndex = '-1';
                         return;
                     }}
 
                     items.forEach((el, idx) => {{
                         if (idx === newIdx) {{
+                            el.classList.add('dock-selected');
                             el.style.backgroundColor = '#DBEAFE';
                             el.style.color = '#1D4ED8';
                             el.style.fontWeight = '600';
                         }} else {{
+                            el.classList.remove('dock-selected');
                             el.style.backgroundColor = '#FFFFFF';
                             el.style.color = '#1E293B';
                             el.style.fontWeight = 'normal';
@@ -764,25 +772,31 @@ def run_streamlit_app():
                     }});
 
                     selectedIndex = newIdx;
+                    if (dockDropdown) dockDropdown.dataset.selectedIndex = String(newIdx);
 
                     if (selectedIndex >= 0 && selectedIndex < items.length) {{
                         const activeEl = items[selectedIndex];
                         if (scrollIntoView) {{
                             activeEl.scrollIntoView({{ block: 'nearest' }});
                         }}
+                        if (syncInput && activeEl.textContent) {{
+                            dockInput.value = activeEl.textContent.trim();
+                        }}
                     }}
                 }}
 
                 function applyValue(val) {{
                     if (!val) return;
+                    const cleanVal = val.trim();
+                    if (!cleanVal) return;
                     const ta = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
                     if (ta) {{
                         const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value')?.set ||
                                        Object.getOwnPropertyDescriptor(ta, 'value')?.set;
                         if (setter) {{
-                            setter.call(ta, val);
+                            setter.call(ta, cleanVal);
                         }} else {{
-                            ta.value = val;
+                            ta.value = cleanVal;
                         }}
                         ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
                         ta.dispatchEvent(new Event('change', {{ bubbles: true }}));
@@ -792,6 +806,7 @@ def run_streamlit_app():
 
                 function renderDropdown(filterVal = '') {{
                     selectedIndex = -1;
+                    if (dockDropdown) dockDropdown.dataset.selectedIndex = '-1';
                     const q = (filterVal || '').trim().replace(/^['"]+|['"]+$/g, '').toLowerCase();
                     let matches;
                     if (!q) {{
@@ -810,8 +825,8 @@ def run_streamlit_app():
                         const headerRow = parentDoc.createElement('div');
                         headerRow.style.cssText = 'padding: 6px 12px; background: #F1F5F9; color: #475569; font-size: 11px; font-weight: 600; border-bottom: 1px solid #E2E8F0; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center;';
                         headerRow.innerHTML = q
-                            ? `<span>🔍 검색 결과</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 클릭 선택)</span>`
-                            : `<span>📋 전체 병원균/바이러스 목록</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 클릭 선택)</span>`;
+                            ? `<span>🔍 검색 결과</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 엔터 / 클릭 선택)</span>`
+                            : `<span>📋 전체 병원균/바이러스 목록</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 엔터 / 클릭 선택)</span>`;
                         dockDropdown.appendChild(headerRow);
 
                         matches.forEach((item, idx) => {{
@@ -821,13 +836,14 @@ def run_streamlit_app():
                             row.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #F1F5F9; color: #1E293B; line-height: 1.4; word-break: break-word; transition: background 0.1s;';
                             row.textContent = item;
                             row.onmouseover = () => {{
-                                updateSelection(idx, false);
+                                updateSelection(idx, false, false);
                             }};
                             row.onmousedown = (ev) => {{
                                 ev.preventDefault();
                                 dockInput.value = item;
                                 applyValue(item);
                                 dockDropdown.style.display = 'none';
+                                dockDropdown.dataset.selectedIndex = '-1';
                                 selectedIndex = -1;
                             }};
                             dockDropdown.appendChild(row);
@@ -844,42 +860,69 @@ def run_streamlit_app():
                 dockInput.onkeydown = (e) => {{
                     const items = getDropdownItems();
                     const isOpen = dockDropdown && dockDropdown.style.display !== 'none';
+                    const isEnter = e.key === 'Enter' || e.keyCode === 13 || e.which === 13 || e.code === 'Enter' || e.code === 'NumpadEnter';
 
                     if (e.key === 'ArrowDown') {{
                         e.preventDefault();
                         if (!isOpen) {{
                             renderDropdown(dockInput.value);
-                            updateSelection(0, true);
+                            updateSelection(0, true, true);
                         }} else if (items.length > 0) {{
                             let next = selectedIndex + 1;
                             if (next >= items.length) next = 0;
-                            updateSelection(next, true);
+                            updateSelection(next, true, true);
                         }}
                     }} else if (e.key === 'ArrowUp') {{
                         e.preventDefault();
                         if (!isOpen) {{
                             renderDropdown(dockInput.value);
-                            updateSelection(items.length - 1, true);
+                            updateSelection(items.length - 1, true, true);
                         }} else if (items.length > 0) {{
                             let prev = selectedIndex - 1;
                             if (prev < 0) prev = items.length - 1;
-                            updateSelection(prev, true);
+                            updateSelection(prev, true, true);
                         }}
-                    }} else if (e.key === 'Enter') {{
+                    }} else if (isEnter) {{
                         e.preventDefault();
-                        if (isOpen && selectedIndex >= 0 && selectedIndex < items.length) {{
-                            const chosen = items[selectedIndex].textContent;
-                            dockInput.value = chosen;
-                            applyValue(chosen);
-                            dockDropdown.style.display = 'none';
-                            selectedIndex = -1;
-                        }} else if (dockInput.value.trim()) {{
-                            applyValue(dockInput.value.trim());
-                            if (dockDropdown) dockDropdown.style.display = 'none';
-                            selectedIndex = -1;
+                        e.stopPropagation();
+
+                        let targetVal = '';
+                        const selectedEl = dockDropdown ? dockDropdown.querySelector('.dock-selected') : null;
+
+                        if (selectedEl && selectedEl.textContent) {{
+                            targetVal = selectedEl.textContent.trim();
+                        }} else if (selectedIndex >= 0 && selectedIndex < items.length) {{
+                            targetVal = items[selectedIndex].textContent.trim();
+                        }} else if (dockDropdown && dockDropdown.dataset.selectedIndex >= 0) {{
+                            const savedIdx = parseInt(dockDropdown.dataset.selectedIndex, 10);
+                            if (savedIdx >= 0 && savedIdx < items.length) {{
+                                targetVal = items[savedIdx].textContent.trim();
+                            }}
                         }}
+
+                        if (!targetVal) {{
+                            if (dockInput.value.trim()) {{
+                                targetVal = dockInput.value.trim();
+                            }} else if (isOpen && items.length > 0) {{
+                                targetVal = items[0].textContent.trim();
+                            }}
+                        }}
+
+                        if (targetVal) {{
+                            dockInput.value = targetVal;
+                            applyValue(targetVal);
+                        }}
+
+                        if (dockDropdown) {{
+                            dockDropdown.style.display = 'none';
+                            dockDropdown.dataset.selectedIndex = '-1';
+                        }}
+                        selectedIndex = -1;
                     }} else if (e.key === 'Escape') {{
-                        if (dockDropdown) dockDropdown.style.display = 'none';
+                        if (dockDropdown) {{
+                            dockDropdown.style.display = 'none';
+                            dockDropdown.dataset.selectedIndex = '-1';
+                        }}
                         selectedIndex = -1;
                     }}
                 }};
@@ -887,7 +930,10 @@ def run_streamlit_app():
                 dockBtn.onclick = (e) => {{
                     e.preventDefault();
                     applyValue(dockInput.value);
-                    dockDropdown.style.display = 'none';
+                    if (dockDropdown) {{
+                        dockDropdown.style.display = 'none';
+                        dockDropdown.dataset.selectedIndex = '-1';
+                    }}
                     selectedIndex = -1;
                 }};
                 dockBtn.onmouseover = () => {{ dockBtn.style.backgroundColor = '#1D4ED8'; }};
