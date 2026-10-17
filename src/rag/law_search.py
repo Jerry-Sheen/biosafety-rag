@@ -50,8 +50,8 @@ CORE_LAWS_KNOWLEDGE = {
             ]
         },
         "precautions": {
-            "형사처벌 및 행정처분": "허가 없이 고위험병원체·생물테러병원체를 반입하거나 보유한 자는 5년 이하의 징역 또는 5천만원 이하의 벌금(제77조~제79조의2). 분리·이동·폐기 미신고 또는 거짓 신고 시 3년 이하의 징역 또는 3천만원 이하의 벌금. 안전관리 위반 시 허가 취소 또는 시설 폐쇄 처분.",
-            "양벌규정": "법인의 대표자나 대리인, 사용인, 종업원이 위반행위를 한 경우 행위자를 처벌하는 외에 그 법인 또는 개인에게도 해당 조문의 벌금형 병과(제82조).",
+            "형사처벌 및 행정처분": "제77조(벌칙): 고위험병원체 무허가 반입(제22조제1항), 생물테러감염병병원체 무허가 보유(제23조의3제1항) 시 5년 이하의 징역 또는 5천만원 이하의 벌금. 제78조: 고위험병원체 분리 미신고 또는 거짓 신고(제21조제1항), 이동 미신고(제21조제2항), 폐기 미신고(제23조제3항), 안전관리기준 위반(제23조제1항) 시 3년 이하의 징역 또는 3천만원 이하의 벌금. 제23조제2항 위반 시 허가 취소 또는 시설 폐쇄 처분.",
+            "양벌규정": "제82조(양벌규정): 법인의 대표자나 대리인, 사용인, 종업원이 위반행위를 한 경우 행위자를 처벌하는 외에 그 법인 또는 개인에게도 해당 조문의 벌금형 병과.",
             "보관 및 운송 규정": "허가·신고된 생물안전 연구시설(BL2/BL3) 내 2중 잠금장치 보관고에 보관 필수. 이동 및 수송 시 질병관리청 생물안전 수송지침(3중 밀폐 포장용기, 라벨 표기, 비상연락처 동봉) 엄격 준수.",
             "위험물질 취급 제한": "비인가자의 단독 보관시설 출입 및 취급 전면 금지, 고위험병원체 관리대장 상시 비치 및 기록 후 5년간 의무 보존."
         }
@@ -82,8 +82,8 @@ CORE_LAWS_KNOWLEDGE = {
             ]
         },
         "precautions": {
-            "형사처벌 및 행정처분": "생물작용제를 무기로 사용하거나 제조·보유·사용 등을 한 자는 사형, 무기 또는 3년 이상의 징역(제25조). 허가 없이 생물작용제를 수출입하거나 제조신고를 위반한 자는 5년 이하의 징역 또는 5천만원 이하의 벌금(제26조, 제27조). 보유·양도·폐기 미신고 시 2년 이하의 징역 또는 2천만원 이하의 벌금.",
-            "양벌규정": "법인의 대표자 또는 종업원이 업무에 관하여 위반행위를 한 경우 행위자를 처벌하는 외에 그 법인에 대하여도 1억원 이하의 벌금형 또는 해당 조의 벌금형 병과(제29조).",
+            "형사처벌 및 행정처분": "제25조(벌칙): ① 제4조의2제1항을 위반하여 화학무기ㆍ생물무기를 개발ㆍ제조ㆍ획득ㆍ보유ㆍ비축ㆍ이전ㆍ운송 또는 사용하거나 이를 지원 또는 권유한 자는 무기(無期) 또는 5년 이상의 징역이나 1억원 이하의 벌금에 처함. ② 화학무기ㆍ생물무기를 사용하여 사람의 생명ㆍ신체 또는 재산에 해를 끼치거나 그 밖에 공공의 안녕을 문란하게 한 자는 사형, 무기 또는 7년 이상의 징역에 처함. ③ 미수범 처벌. 제26조(벌칙): 무기 개발·제조 등의 목적으로 생물작용제등을 제조·보유·사용한 자(제4조의2제2항)는 7년 이하의 징역 또는 7천만원 이하의 벌금(미수범 처벌). 제27조(벌칙): 생물작용제등 제조 미신고(제5조의2제1항), 폐기명령 위반(제10조제1항), 무허가 수출입(제11조제1항, 제12조제1항) 위반자는 5년 이하의 징역 또는 5천만원 이하의 벌금. 제28조(벌칙): 보유 미신고(제13조), 인수·인도 미신고(제13조의2) 시 2년 이하의 징역 또는 2천만원 이하의 벌금.",
+            "양벌규정": "제29조(양벌규정): 법인의 대표자나 대리인, 종업원이 업무에 관하여 제25조제1항(미수범 포함), 제26조~제28조 위반행위를 하면 행위자를 벌하는 외에 그 법인 또는 개인에게도 해당 조문의 벌금형 병과.",
             "보관 및 운송 규정": "생물보안(Biosecurity) 구역 설정, 2인 이상 입회하 출입, 24시간 CCTV 영상 감시 및 6개월간 녹화본 보존, 2중 잠금장치. 운송 시 사전 운송계획서 승인 및 보안 전용 운반 절차 준수.",
             "위험물질 취급 제한": "보안관리책임자 의무 지정, 결격사유자(전과자 등)의 생물작용제 취급 전면 배제, 도난·분실 방지 대책 의무화."
         }
@@ -113,8 +113,8 @@ CORE_LAWS_KNOWLEDGE = {
             ]
         },
         "precautions": {
-            "형사처벌 및 행정처분": "승인 없이 시험·연구용 LMO를 수입하거나 개발·실험한 자는 3년 이하의 징역 또는 5천만원 이하의 벌금(제39조, 제40조). 연구시설 허가·신고 없이 운영 시 2년 이하의 징역 또는 3천만원 이하의 벌금, 시설 폐쇄 또는 운영정지 처분.",
-            "양벌규정": "법인의 대표자, 대리인, 사용인, 종업원이 위반행위를 한 경우 행위자를 처벌하는 외에 그 법인 또는 개인에게도 해당 조의 벌금형 병과(제44조).",
+            "형사처벌 및 행정처분": "제39조(벌칙): 승인 없이 유전자변형생물체를 수입하거나 개발·실험한 자(제8조, 제22조)는 5년 이하의 징역 또는 7천만원 이하의 벌금. 제40조: 허가 없이 연구시설을 설치·운영한 자(제22조)는 3년 이하의 징역 또는 5천만원 이하의 벌금. 제41조: 수입승인 위반, 폐기명령 위반 시 2년 이하의 징역 또는 3천만원 이하의 벌금. 제42조: 연구시설 미신고 운영 시 1년 이하의 징역 또는 2천만원 이하의 벌금.",
+            "양벌규정": "제43조(양벌규정): 법인의 대표자, 대리인, 종업원이 위반행위를 한 경우 행위자를 처벌하는 외에 그 법인 또는 개인에게도 해당 조의 벌금형 병과.",
             "보관 및 운송 규정": "LMO 보관설비에 생물안전 취급표시(픽토그램) 부착, 보관·관리대장 5년간 보관. 이동 시 견고한 밀폐 2중 용기 포장 및 취급주의 라벨 부착.",
             "위험물질 취급 제한": "기관생물안전위원회(IBC) 사전 심의 필수, 생물안전관리책임자 미임명 또는 안전교육 미이수 시 취급 제한."
         }
@@ -125,7 +125,7 @@ CORE_LAWS_KNOWLEDGE = {
         "ministry": "농림축산식품부 (농림축산검역본부)",
         "law_url": "https://www.law.go.kr/법령/가축전염병예방법",
         "items": {
-            "분리신고": "제14조(가축전염병 병원체의 분리신고) - 가축전염병 병원체(특별관리병원체 등)를 분리한 자는 농림축산검역본부장에게 지체 없이 신고하여야 함.",
+            "분리신고": "제13조(가축전염병 병원체의 분리신고) - 가축전염병 병원체(특별관리병원체 등)를 분리한 자는 농림축산검역본부장에게 지체 없이 신고하여야 함.",
             "이동(분양)신고": "제14조의2(병원체의 이동신고 등) - 관리병원체를 이동하려는 자는 농림축산검역본부장에게 사전 이동신고를 하여야 함.",
             "보유·폐기신고": "보유: 관리병원체 보유현황 관리대장 기록·비치 / 폐기: 불활화 검증 후 사후 폐기보고",
             "제조신고 및 개발실험승인": "해당없음 (수의생명자원 보존·관리 지침 준수)",
@@ -144,8 +144,8 @@ CORE_LAWS_KNOWLEDGE = {
             ]
         },
         "precautions": {
-            "형사처벌 및 행정처분": "관리병원체(특별관리/일반관리) 분리신고 또는 이동신고를 하지 않거나 거짓으로 신고한 자, 허가 없이 수입한 자는 3년 이하의 징역 또는 3천만원 이하의 벌금(제56조~제58조). 시설 폐쇄명령 또는 사용정지 처분.",
-            "양벌규정": "법인의 대표자나 대리인, 종업원이 위반행위를 하면 행위자를 처벌하는 외에 그 법인 또는 개인에게도 해당 조의 벌금형 병과(제60조).",
+            "형사처벌 및 행정처분": "제56조(벌칙): 허가 없이 수입금지물건(가축전염병 병원체)을 수입한 자(제32조)는 3년 이하의 징역 또는 3천만원 이하의 벌금. 제57조: 특별관리병원체 분리 미신고(제13조), 이동 미신고(제14조의2) 시 1년 이하의 징역 또는 1천만원 이하의 벌금. 시설 폐쇄명령 또는 사용정지 처분.",
+            "양벌규정": "제61조(양벌규정): 법인의 대표자나 대리인, 종업원이 위반행위를 하면 행위자를 처벌하는 외에 그 법인 또는 개인에게도 해당 조의 벌금형 병과.",
             "보관 및 운송 규정": "수의생명자원 보존·관리 규정에 적합한 차폐시설 내 보관, 이동 시 사전 이동신고필증 수령 및 검역 규격 전용 용기 포장 운송.",
             "위험물질 취급 제한": "미신고 병원체의 외부 유출·무단 양도 전면 금지, 방역 관리자의 입회 및 취급대장 상시 기록."
         }
@@ -175,8 +175,8 @@ CORE_LAWS_KNOWLEDGE = {
             ]
         },
         "precautions": {
-            "형사처벌 및 행정처분": "허가 없이 수입금지물건(전염병 병원체 감염 생물 등)을 수입한 자는 3년 이하의 징역 또는 3천만원 이하의 벌금(제53조). 이동제한·살처분 명령 위반 시 1년 이하의 징역 또는 1천만원 이하의 벌금(제54조). 분리신고 미이행 또는 거짓 신고 시 500만원 이하의 과태료(제57조). 시설 폐쇄 또는 업무정지 처분.",
-            "양벌규정": "법인의 대표자나 대리인, 종업원이 업무에 관하여 위반행위를 하면 행위자를 처벌하는 외에 그 법인 또는 개인에게도 해당 조의 벌금형 병과(제55조).",
+            "형사처벌 및 행정처분": "제53조(벌칙): 허가 없이 수입금지물건(전염병 병원체 감염 생물 등)을 수입한 자는 3년 이하의 징역 또는 3천만원 이하의 벌금. 제54조: 살처분 명령(제16조) 또는 사체 처분제한(제17조) 위반 시 1년 이하의 징역 또는 1천만원 이하의 벌금. 제57조: 분리신고 미이행 또는 거짓 신고 시 500만원 이하의 과태료. 시설 폐쇄 또는 업무정지 처분.",
+            "양벌규정": "제55조(양벌규정): 법인의 대표자나 대리인, 종업원이 업무에 관하여 위반행위를 하면 행위자를 처벌하는 외에 그 법인 또는 개인에게도 해당 조의 벌금형 병과.",
             "보관 및 운송 규정": "병원체 보존시설 차폐 및 2중 잠금 관리, 외부 유출 방지 설비 구비. 이동 시 밀폐 누출 방지 전용 용기 포장 및 방역관 확인.",
             "위험물질 취급 제한": "감염 의심 수산생물의 임의 방류·폐기·유통 전면 금지, 방역 관리책임자 지정 및 취급 일지 상시 기록."
         }
@@ -184,8 +184,19 @@ CORE_LAWS_KNOWLEDGE = {
 }
 
 
+DEFAULT_CORE_ARTICLES = {
+    "화학생물무기금지법": ["4의2", "5의2", "10의2", "11", "12", "13", "13의2", "14", "25", "26", "27", "28", "29"],
+    "감염병예방법": ["21", "22", "23", "23의2", "23의3", "77", "78", "79", "82"],
+    "유전자변형생물체법": ["8", "9", "20", "22", "39", "40", "41", "42", "43"],
+    "가축전염병예방법": ["13", "14의2", "31", "32", "56", "57", "61"],
+    "수산생물질병관리법": ["13", "15", "16", "17", "24", "27", "31", "53", "54", "55", "57"],
+}
+
+
 class LawSearchClient:
     """Client for querying law.go.kr and generating grounded statutory contexts."""
+
+    _law_articles_cache: Dict[str, List[Dict[str, Any]]] = {}
 
     def __init__(self, oc: str = DEFAULT_OC):
         self.oc = oc
@@ -217,14 +228,107 @@ class LawSearchClient:
             logger.warning(f"law.go.kr real-time lookup failed for '{law_query}': {e}")
         return None
 
+    def fetch_law_articles(self, mst: str) -> List[Dict[str, Any]]:
+        """
+        Retrieves full statutory articles from law.go.kr DRF lawService.do by MST,
+        parsing each article number, title, and verbatim clauses (항, 호).
+        Results are cached in memory for high-performance zero-latency subsequent queries.
+        """
+        if not mst:
+            return []
+        if mst in self._law_articles_cache:
+            return self._law_articles_cache[mst]
+
+        try:
+            url = f"{DRF_SERVICE_URL}?OC={self.oc}&target=law&MST={mst}&type=XML"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                xml_data = resp.read().decode("utf-8", errors="ignore")
+                root = ET.fromstring(xml_data)
+                articles = []
+                for art in root.iter("조문단위"):
+                    no = (art.findtext("조문번호") or "").strip()
+                    title = (art.findtext("조문제목") or "").strip()
+                    content = (art.findtext("조문내용") or "").strip()
+
+                    lines = []
+                    if content:
+                        lines.append(content)
+                    for hang in art.findall("항"):
+                        h_c = (hang.findtext("항내용") or "").strip()
+                        if h_c:
+                            lines.append("  " + h_c)
+                        for ho in hang.findall("호"):
+                            ho_c = (ho.findtext("호내용") or "").strip()
+                            if ho_c:
+                                lines.append("    " + ho_c)
+                    full_text = "\n".join(lines).strip()
+                    if no and full_text:
+                        articles.append({
+                            "no": no,
+                            "title": title,
+                            "text": full_text
+                        })
+                if articles:
+                    self._law_articles_cache[mst] = articles
+                    return articles
+        except Exception as e:
+            logger.warning(f"Failed to fetch full statutory articles for MST {mst}: {e}")
+        return []
+
+    def get_relevant_articles(
+        self,
+        mst: str,
+        query: str = "",
+        law_key: str = ""
+    ) -> List[Dict[str, Any]]:
+        """
+        Extracts verbatim law articles matching specific article numbers
+        (e.g. '제25조', '25조', '제4조의2') or keywords (벌칙, 허가, 신고 등) from query or defaults.
+        """
+        articles = self.fetch_law_articles(mst)
+        if not articles:
+            return []
+
+        import re
+        # 1) Detect explicit article numbers mentioned in query (e.g. '제25조', '25조', '제4조의2')
+        explicit_nos = set(re.findall(r'제?\s*(\d+(?:의\d+)?)\s*조', query))
+
+        matched = []
+        seen_nos = set()
+
+        # Prioritize explicitly queried articles (e.g., if user asks about '제25조', ensure it is returned first)
+        for a in articles:
+            if a["no"] in explicit_nos:
+                matched.append(a)
+                seen_nos.add(a["no"])
+
+        # Check default core article numbers for this law
+        default_nos = DEFAULT_CORE_ARTICLES.get(law_key, [])
+        for a in articles:
+            if a["no"] in default_nos and a["no"] not in seen_nos:
+                matched.append(a)
+                seen_nos.add(a["no"])
+
+        # If user asks about '벌칙', '처벌', '과태료', include matching penalty articles
+        q_lower = query.lower()
+        if any(w in q_lower for w in ["벌칙", "처벌", "형벌", "징역", "벌금", "양벌", "과태료"]):
+            for a in articles:
+                if a["no"] not in seen_nos and ("벌칙" in a["title"] or "양벌" in a["title"] or "과태료" in a["title"] or "벌칙" in a["text"]):
+                    matched.append(a)
+                    seen_nos.add(a["no"])
+
+        return matched
+
     def search_applicable_laws_for_pathogen(
         self,
         pathogen_name: str,
-        detected_categories: Dict[str, Any]
+        detected_categories: Dict[str, Any],
+        query: str = ""
     ) -> Dict[str, Any]:
         """
         Determines applicable laws based on pathogen classification
-        and compiles grounded statutory details for the 8 mandatory reporting items.
+        and compiles grounded statutory details for the 8 mandatory reporting items and exact articles.
         """
         applicable_laws = []
         is_bioweapon = detected_categories.get("is_bioweapon", True)
@@ -255,6 +359,9 @@ class LawSearchClient:
 
             effective_date = realtime_meta.get("effective_date", "최신 시행") if realtime_meta else "최신 시행"
             official_url = realtime_meta.get("link", knowledge.get("law_url")) if realtime_meta else knowledge.get("law_url")
+            mst = realtime_meta.get("mst", "") if realtime_meta else ""
+
+            verbatim_articles = self.get_relevant_articles(mst=mst, query=query, law_key=law_key) if mst else []
 
             law_details.append({
                 "law_key": law_key,
@@ -263,9 +370,11 @@ class LawSearchClient:
                 "ministry": knowledge.get("ministry", "관계 부처"),
                 "effective_date": effective_date,
                 "url": official_url,
+                "mst": mst,
                 "items": knowledge.get("items", {}),
                 "practical_guide": knowledge.get("practical_guide", {}),
-                "precautions": knowledge.get("precautions", {})
+                "precautions": knowledge.get("precautions", {}),
+                "articles": verbatim_articles,
             })
 
         return {
@@ -284,7 +393,7 @@ class LawSearchClient:
         }
 
     def format_law_context_for_prompt(self, law_data: Dict[str, Any]) -> str:
-        """Formats legal search results into structured prompt context per law."""
+        """Formats legal search results into structured prompt context per law including verbatim articles."""
         lines = []
         lines.append("### [법제처(국가법령정보센터) 최신 법령 검색 및 법률별 규제·절차 데이터]")
         lines.append(f"대상 병원체: {law_data['pathogen']}")
@@ -311,6 +420,13 @@ class LawSearchClient:
                     lines.append(f"  * [{p_key}]: {p_desc}")
             else:
                 lines.append("  * 해당사항 없음")
+
+            # Verbatim statutory provisions from law.go.kr
+            articles = law.get("articles", [])
+            if articles:
+                lines.append("- [법제처(국가법령정보센터) 공식 법령 조문 원문 (최신 실시간 데이터)]:")
+                for art in articles:
+                    lines.append(f"  {art['text']}")
             lines.append("")
 
         return "\n".join(lines)
@@ -318,7 +434,7 @@ class LawSearchClient:
     def search_laws_for_general_query(self, query: str) -> Dict[str, Any]:
         """
         Identifies relevant statutory frameworks for general legal, institutional,
-        and procedural queries (non-pathogen specific) and retrieves latest metadata from law.go.kr.
+        and procedural queries (non-pathogen specific) and retrieves latest metadata and verbatim articles from law.go.kr.
         """
         q_lower = query.lower()
         selected_keys = []
@@ -326,7 +442,7 @@ class LawSearchClient:
         # Keyword mapping for relevant biological safety and biosecurity laws
         if any(k in q_lower for k in ["감염병", "고위험병원체", "생물테러", "질병관리청", "보건", "분리신고"]):
             selected_keys.append("감염병예방법")
-        if any(k in q_lower for k in ["화학무기", "생물무기", "생물작용제", "독소", "생화학", "산업부", "산자부", "ktr", "제조신고", "보유신고"]):
+        if any(k in q_lower for k in ["화학무기", "생물무기", "생물작용제", "독소", "생화학", "산업부", "산자부", "ktr", "제조신고", "보유신고", "25조", "제25조", "무기"]):
             selected_keys.append("화학생물무기금지법")
         if any(k in q_lower for k in ["유전자변형", "lmo", "연구시설", "ibc", "생물안전위원회", "개발실험", "과기부", "과기정통부", "시험연구"]):
             selected_keys.append("유전자변형생물체법")
@@ -347,6 +463,9 @@ class LawSearchClient:
 
             effective_date = realtime_meta.get("effective_date", "최신 시행") if realtime_meta else "최신 시행"
             official_url = realtime_meta.get("link", knowledge.get("law_url")) if realtime_meta else knowledge.get("law_url")
+            mst = realtime_meta.get("mst", "") if realtime_meta else ""
+
+            verbatim_articles = self.get_relevant_articles(mst=mst, query=query, law_key=law_key) if mst else []
 
             law_details.append({
                 "law_key": law_key,
@@ -355,6 +474,7 @@ class LawSearchClient:
                 "ministry": knowledge.get("ministry", "관계 부처"),
                 "effective_date": effective_date,
                 "url": official_url,
+                "mst": mst,
                 "items": knowledge.get("items", {}),
                 "practical_guide": knowledge.get("practical_guide", {}),
                 "precautions": knowledge.get("precautions", {})
@@ -368,10 +488,10 @@ class LawSearchClient:
     def format_general_law_context_for_prompt(self, law_data: Dict[str, Any]) -> str:
         """
         Formats legal provisions for general legal/procedural queries in an objective statutory format
-        without imposing the 8-item pathogen-specific template.
+        with verbatim law articles directly from law.go.kr without imposing the 8-item template.
         """
         lines = []
-        lines.append("### [법제처(국가법령정보센터) 최신 법령 정보 및 조문·절차 데이터]")
+        lines.append("### [법제처(국가법령정보센터) 최신 법령 정보 및 공식 조문 원문 데이터]")
         lines.append(f"질의 키워드/주제: {law_data.get('query', '')}")
         lines.append("")
 
@@ -396,6 +516,13 @@ class LawSearchClient:
                     lines.append(f"  * [{p_key}]: {p_desc}")
             else:
                 lines.append("  * 규정된 주요 벌칙 확인 필요")
+
+            # Verbatim statutory provisions directly from law.go.kr
+            articles = law.get("articles", [])
+            if articles:
+                lines.append("- [법제처(국가법령정보센터) 공식 법령 조문 원문 (최신 실시간 데이터)]:")
+                for art in articles:
+                    lines.append(f"  {art['text']}")
             lines.append("")
 
         return "\n".join(lines)

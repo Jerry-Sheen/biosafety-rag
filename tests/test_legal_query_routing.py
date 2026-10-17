@@ -46,3 +46,16 @@ def test_pathogen_vs_general_query_classification():
     assert registry.find_pathogen("생물작용제 제조신고 절차와 요건") is None
     assert registry.find_pathogen("LMO 연구시설 안전관리 기준") is None
     assert registry.find_pathogen("고위험병원체 수입허가 관련 법률") is None
+
+
+def test_verbatim_article_25_extraction():
+    """Verify Article 25 verbatim text from law.go.kr is extracted accurately."""
+    client = LawSearchClient()
+    res = client.search_laws_for_general_query("법 제25조의 내용을 정확하게 알려주고 비교 검토해줘")
+    formatted = client.format_general_law_context_for_prompt(res)
+
+    # Must contain official verbatim text of Article 25 from law.go.kr
+    assert "제25조(벌칙)" in formatted
+    assert "사형, 무기 또는 7년 이상의 징역" in formatted
+    assert "무기(無期) 또는 5년 이상의 징역이나 1억원 이하의 벌금" in formatted
+
