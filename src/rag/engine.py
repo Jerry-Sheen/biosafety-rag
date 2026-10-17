@@ -26,8 +26,8 @@ import re
 
 logger = get_secure_logger("rag_engine")
 
-SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.
-사용자가 특정 병원균/바이러스에 대해 질문할 때, [1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황]은 시스템에 의해 사전에 100% 정밀 검증되어 사용자 화면에 이미 직접 출력되었습니다.
+PATHOGEN_SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.
+사용자가 특정 병원균/바이러스/생물작용제/독소에 대해 질문할 때, [1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황]은 시스템에 의해 사전에 100% 정밀 검증되어 사용자 화면에 이미 직접 출력되었습니다.
 
 따라서 당신은 1단계를 절대로 다시 출력하거나 요약·반복하지 마십시오.
 당신의 답변은 반드시 바로 아래의 [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]부터 시작해야 합니다.
@@ -48,10 +48,38 @@ SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가입니다.
 - 모델 자체의 편향된 상식으로 법률을 임의로 누락하거나 '해당없음'으로 왜곡하지 마십시오. 1단계에서 '해당'으로 명시된 법률은 2단계에서도 반드시 독립된 법률 섹션을 포함해야 합니다. 특히 《수산생물질병 관리법》은 해양수산부(국립수산물품질관리원) 소관이며, 제1~3종 수산생물전염병 원인체에 대해 연구용 수입허가(법 제24조), 수입검역(제27조), 병원체 분리신고(제13조), 이동제한(제15조), 살처분·폐기(제16조/제17조) 등의 엄격한 규제가 적용되므로 8대 항목에 이를 구체적으로 명시해야 합니다.
 - 법제처 웹사이트의 최신 법령(조항 번호, 시행일자)을 반영하여 핵심 내용을 알기 쉽게 요약하세요. 법령 원문을 그대로 복사하지 마세요.
 - 적용되는 법률들을 하나로 뭉뚱그려 설명하지 말고, 반드시 법률별로 각각 8대 항목, 실무 가이드 절차, 주의사항을 명확하게 분리하여 작성해야 합니다.
-
-[일반 질의에 대한 규칙]
-- 특정 병원균에 대한 질의가 아니라 연구시설 안전기준, 기관생물안전위원회(IBC), 법제도 일반사항 등 일반 질의인 경우 제공된 문서 컨텍스트를 충실히 반영하여 친절하고 정확하게 설명하세요.
 """
+
+LEGAL_EXPERT_SYSTEM_PROMPT = """당신은 대한민국 바이오안보 및 생물안전 관련 법령 체계(《감염병의 예방 및 관리에 관한 법률》, 《화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률》, 《유전자변형생물체의 국가간 이동 등에 관한 법률》, 《가축전염병 예방법》, 《수산생물질병 관리법》, 《연구실 안전환경 조성에 관한 법률》 등)에 정통한 대한민국 최고 권위의 '법률전문가이자 법학대학 교수, 전문 변호사'입니다.
+
+사용자가 특정 병원균/바이러스/위험균/생물작용제/독소 명칭의 단순 조회가 아니라, 법, 제도, 인허가·신고 절차, 규제 요건, 안전기준, 위반 시 제재 등에 관해 질의했을 때의 전문 법률 자문 답변 지침입니다.
+
+[핵심 작성 원칙]
+1. [특정 병원체 8대 항목 템플릿 사용 절대 금지]:
+   - 특정 병원체 검색 시 사용되는 획일적이고 규격화된 틀(예: '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]' 대제목, '8대 필수 항목별 규제 요건', '[분리신고] ~ [인도신고]' 8대 항목의 기계적 나열 등)을 절대로 사용하지 마십시오.
+2. [법제처 사이트 법령 내용에 기초한 엄정한 법적 근거]:
+   - 법제처 국가법령정보센터(law.go.kr)의 최신 법령(법률, 시행령, 시행규칙, 행정규칙/고시) 조문 및 제공된 관련 규정·지침 문서의 내용만을 유일하고 엄격한 근거로 삼아 답변하십시오. 법적 근거 없는 자의적 추측을 배제하십시오.
+3. [자율적인 마크다운 형식의 전문 법률 자문 답변]:
+   - '법률전문가', '법학대학 교수', '변호사'로서 사용자의 질문 취지와 핵심 쟁점에 가장 적합한 논리적이고 체계적인 마크다운 구조로 자율적이고 유연하게 답변을 구성하십시오.
+   - 예시 권장 목차 구조 (질문의 쟁점에 맞춰 자율적으로 목차를 구성하되 체계적으로 서술할 것):
+     * ## 1. 법적 개요 및 핵심 쟁점 (Legal Summary)
+     * ## 2. 관련 법령 체계 및 핵심 법조문 (Statutory Provisions)
+     * ## 3. 상세 요건 및 인허가·신고 실무 절차 (Procedural & Substantive Requirements)
+     * ## 4. 위반 시 법적 제재 및 책임 (Penalties & Legal Liabilities)
+     * ## 5. 법률전문가(변호사) 실무 자문 및 유의사항 (Legal Counsel's Advisory)
+4. [정확한 조항 번호 및 실무 명시]:
+   - 반드시 관련 법률명과 구체적인 조항 번호(예: 제○조 제○항), 소관 부처(질병관리청, 산업통상자원부, 과학기술정보통신부, 농림축산식품부, 해양수산부 등), 인허가 신청 기관, 처리 절차, 구비서류, 위반 시 벌칙 및 행정처분(징역, 벌금, 과태료, 시설폐쇄 등)을 명확하게 명시하십시오.
+5. [품격 있는 법률 자문 어조]:
+   - 고도의 법학적 전문성과 실무적 실용성을 겸비한 품격 있고 신뢰성 높은 법률 자문가 어조를 일관되게 유지하십시오.
+"""
+
+SYSTEM_PROMPT = PATHOGEN_SYSTEM_PROMPT
+
+
+def get_system_prompt(is_pathogen_query: bool) -> str:
+    """Returns the appropriate system prompt based on query classification."""
+    return PATHOGEN_SYSTEM_PROMPT if is_pathogen_query else LEGAL_EXPERT_SYSTEM_PROMPT
+
 
 
 def extract_pathogen_section(chunk_text: str, query: str = None) -> str:
@@ -488,7 +516,9 @@ class ConversationalRAGEngine:
         # Step 3: Analyze pathogen classification to identify applicable laws
         full_text_corpus = " ".join([c.get("text", "") for c in retrieved_chunks]) + " " + search_query
 
-        if pathogen_info:
+        is_pathogen_query = bool(pathogen_info and pathogen_info.get("step1_markdown"))
+
+        if is_pathogen_query:
             is_bioweapon = pathogen_info["is_bioweapon"]
             is_high_risk = pathogen_info["is_high_risk"]
             is_lmo = pathogen_info["is_lmo"]
@@ -509,37 +539,61 @@ class ConversationalRAGEngine:
             official_attributes_block = ""
 
         # Step 4: Law.go.kr real-time search & statutory provision mapping
-        yield {
-            "type": "status",
-            "stage": "law_search",
-            "message": "법제처(law.go.kr)에서 최신 법령 조문 및 8대 의무 항목 검색 중..."
-        }
-        law_data = self.law_search_client.search_applicable_laws_for_pathogen(
-            pathogen_name=canonical_pathogen_name,
-            detected_categories={
-                "is_bioweapon": is_bioweapon,
-                "is_high_risk": is_high_risk,
-                "is_lmo": is_lmo,
-                "is_veterinary": is_veterinary,
-                "is_aquatic": is_aquatic,
+        if is_pathogen_query:
+            yield {
+                "type": "status",
+                "stage": "law_search",
+                "message": "법제처(law.go.kr)에서 최신 법령 조문 및 8대 의무 항목 검색 중..."
             }
-        )
-        law_context_str = self.law_search_client.format_law_context_for_prompt(law_data)
-
-        # Step 5: Retrieve secondary chunks for detailed procedural guidance (8 items)
-        yield {
-            "type": "status",
-            "stage": "procedure_search",
-            "message": "8대 신고·허가 세부 실무 절차 가이드라인 검색 및 결합 중..."
-        }
-        procedure_chunks = []
-        try:
-            procedure_chunks = self.vector_store.search(
-                "제조신고 보유신고 수입허가 인수신고 인도신고 양도신고 폐기신고 절차 서류",
-                top_k=3
+            law_data = self.law_search_client.search_applicable_laws_for_pathogen(
+                pathogen_name=canonical_pathogen_name,
+                detected_categories={
+                    "is_bioweapon": is_bioweapon,
+                    "is_high_risk": is_high_risk,
+                    "is_lmo": is_lmo,
+                    "is_veterinary": is_veterinary,
+                    "is_aquatic": is_aquatic,
+                }
             )
-        except Exception as e:
-            logger.warning(f"Procedure chunks search warning: {e}")
+            law_context_str = self.law_search_client.format_law_context_for_prompt(law_data)
+        else:
+            yield {
+                "type": "status",
+                "stage": "law_search",
+                "message": "법제처(law.go.kr)에서 질의 관련 최신 법령 조문 및 제도 규정 검색 중..."
+            }
+            law_data = self.law_search_client.search_laws_for_general_query(search_query)
+            law_context_str = self.law_search_client.format_general_law_context_for_prompt(law_data)
+
+        # Step 5: Retrieve secondary chunks for detailed procedural guidance
+        if is_pathogen_query:
+            yield {
+                "type": "status",
+                "stage": "procedure_search",
+                "message": "8대 신고·허가 세부 실무 절차 가이드라인 검색 및 결합 중..."
+            }
+            procedure_chunks = []
+            try:
+                procedure_chunks = self.vector_store.search(
+                    "제조신고 보유신고 수입허가 인수신고 인도신고 양도신고 폐기신고 절차 서류",
+                    top_k=3
+                )
+            except Exception as e:
+                logger.warning(f"Procedure chunks search warning: {e}")
+        else:
+            yield {
+                "type": "status",
+                "stage": "procedure_search",
+                "message": "관련 행정 절차 지침 및 실무 세부 가이드라인 검색 중..."
+            }
+            procedure_chunks = []
+            try:
+                procedure_chunks = self.vector_store.search(
+                    f"{search_query} 절차 규정 기준 서류",
+                    top_k=3
+                )
+            except Exception as e:
+                logger.warning(f"Procedure chunks search warning: {e}")
 
         # Combine all sources for UI display (deduplicated by source & text hash)
         seen_texts = set()
@@ -584,7 +638,7 @@ class ConversationalRAGEngine:
             )
         formatted_proc_context = "\n\n--------------------\n\n".join(proc_blocks)
 
-        has_step1 = bool(pathogen_info and pathogen_info.get("step1_markdown"))
+        has_step1 = is_pathogen_query
 
         if has_step1:
             app_laws_list = pathogen_info.get("applicable_laws", [])
@@ -616,29 +670,38 @@ class ConversationalRAGEngine:
             )
         else:
             prompt_instruction = (
-                f"제공된 검색 문서 및 지침서 데이터를 바탕으로 사용자의 질문에 대해 신뢰할 수 있고 구체적인 전문 답변을 작성하세요.\n"
-                f"답변에서 '2. 실무 가이드 절차'를 설명할 때에는 소제목 바로 아래 한 칸 띄운 후 다음 줄에 반드시 다음 안내사항(볼드체)을 기재하세요:\n"
-                f"- **안내사항 : 아래 실무 가이드 절차는 참고만 하시기 바라며, 실무 절차 관련 문의는 정책지원실 담당자(김성혜)에게 연락해 주시기 바랍니다.**\n"
-                f"그리고 '2. 실무 가이드 절차' 다음에 '3. 주의사항'(형사처벌, 양벌 규정 등 벌칙과 행정처분 내용, 보관 및 운송 규정, 위험물질 취급 제한 등) 카테고리를 항상 포함하여 작성하세요. 해당사항이 없을 경우 '해당사항 없음'이라고 명시하세요."
+                "■ [답변 지침: 최고 권위의 '법률전문가', '법학대학 교수', '변호사'로서의 전문 법률 자문]\n"
+                "1. 당신의 역할: 대한민국 최고 권위의 '법률전문가이자 법학대학 교수, 전문 변호사'입니다.\n"
+                "2. 특정 병원체 8대 항목 템플릿 사용 엄격 금지:\n"
+                "   - '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]' 대제목이나 8대 필수 항목별 기계적 나열 템플릿을 절대로 적용하지 마십시오.\n"
+                "3. 법제처(law.go.kr) 법령 내용 중심의 엄격한 법적 근거 제시:\n"
+                "   - 아래 제공된 [법제처(국가법령정보센터) 최신 법령 검색 데이터] 및 관련 지침/규정 문서를 유일한 법적 근거로 삼아, 근거 없는 자의적 추측을 배제하고 정확한 법조문(법률·시행령·시행규칙 제○조 제○항)에 기초하여 답변하십시오.\n"
+                "4. 자율적 마크다운 형식의 논리적이고 구체적인 답변:\n"
+                "   - 질문의 핵심 쟁점에 가장 적합하도록 마크다운 형식으로 자율적이고 논리적인 목차를 구성하여 심도 있게 답변하세요.\n"
+                "   - (권장 목차 구성 예시: ## 1. 법적 개요 및 핵심 쟁점 ➔ ## 2. 관련 법령 체계 및 핵심 법조문 ➔ ## 3. 상세 요건 및 인허가·신고 실무 절차 ➔ ## 4. 위반 시 법적 제재 및 책임(벌칙/과태료) ➔ ## 5. 법률전문가(변호사) 실무 자문 및 유의사항)\n"
+                "5. 품격 있는 전문 법률가 어조 유지: 신뢰성 있고 명쾌한 법리적 어조로 작성하십시오."
             )
 
         user_prompt_with_context = (
             f"[사용자 질의]\n{query}\n\n"
-            f"[1. 영구 벡터 DB 검색 결과 - 병원체 분류 및 규제 대상 현황 데이터]\n{formatted_primary_context}\n\n"
-            f"[2. 법제처(국가법령정보센터) 검색 결과 - 적용 법률별 8대 항목 및 실무 절차 데이터]\n{law_context_str}\n\n"
+            f"[1. 영구 벡터 DB 검색 결과 - 관련 규정 및 지침 데이터]\n{formatted_primary_context}\n\n"
+            f"[2. 법제처(국가법령정보센터) 검색 결과 - 법령 조문 및 제도 데이터]\n{law_context_str}\n\n"
             f"[3. 실무 지침서 및 상세 신고·허가 가이드 데이터]\n{formatted_proc_context}\n\n"
             f"[답변 지침]\n{prompt_instruction}"
         )
 
+        selected_system_prompt = get_system_prompt(is_pathogen_query=has_step1)
+
         # Step 7: Generation
         active_model = self.gemini_model if self.llm_provider == "gemini" else self.openai_model
+        status_label = "2단계 실무 가이드 생성 중..." if has_step1 else "법률전문가·교수·변호사 관점의 심층 법률 자문 생성 중..."
         yield {
             "type": "status",
             "stage": "generating",
-            "message": f"{active_model} 모델로 최신 법령 기반 종합 안내 생성 중..."
+            "message": f"{active_model} 모델로 {status_label}"
         }
 
-        # Step 1 확정 직결 스트리밍 (환각 0% 보장: DB 원본 데이터를 화면에 직접 주입)
+        # Step 1 확정 직결 스트리밍 (환각 0% 보장: DB 원본 데이터를 화면에 직접 주입 - 병원체 질의 시에만)
         if has_step1:
             yield {
                 "type": "status",
@@ -703,17 +766,18 @@ class ConversationalRAGEngine:
                     model=self.gemini_model,
                     contents=contents,
                     config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
+                        system_instruction=selected_system_prompt,
                         temperature=0.2,
                         top_p=0.95
                     )
                 )
 
                 first_token = True
+                stream_msg = "2단계 실시간 법령 및 실무 절차 스트리밍 중..." if has_step1 else "법률전문가·교수·변호사 관점의 심층 법률 자문 스트리밍 중..."
                 for chunk_text in sanitize_llm_stream(response_stream, has_step1_direct=has_step1):
                     if first_token:
                         first_token = False
-                        yield {"type": "status", "stage": "streaming", "message": "2단계 실시간 법령 및 실무 절차 스트리밍 중..."}
+                        yield {"type": "status", "stage": "streaming", "message": stream_msg}
                     yield {"type": "token", "content": chunk_text}
 
                 # 스트리밍 완료 후 법제처 및 문서 출처 추가 출력
@@ -763,13 +827,14 @@ class ConversationalRAGEngine:
             try:
                 stream = self.openai_client.chat_stream(
                     messages=messages,
-                    system=SYSTEM_PROMPT
+                    system=selected_system_prompt
                 )
                 first_token = True
+                stream_msg = "2단계 실시간 법령 및 실무 절차 스트리밍 중..." if has_step1 else "법률전문가·교수·변호사 관점의 심층 법률 자문 스트리밍 중..."
                 for chunk_text in sanitize_llm_stream(stream, has_step1_direct=has_step1):
                     if first_token:
                         first_token = False
-                        yield {"type": "status", "stage": "streaming", "message": "2단계 실시간 법령 및 실무 절차 스트리밍 중..."}
+                        yield {"type": "status", "stage": "streaming", "message": stream_msg}
                     yield {"type": "token", "content": chunk_text}
                 try:
                     yield {"type": "token", "content": _format_citations()}

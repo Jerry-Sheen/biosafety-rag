@@ -314,3 +314,89 @@ class LawSearchClient:
             lines.append("")
 
         return "\n".join(lines)
+
+    def search_laws_for_general_query(self, query: str) -> Dict[str, Any]:
+        """
+        Identifies relevant statutory frameworks for general legal, institutional,
+        and procedural queries (non-pathogen specific) and retrieves latest metadata from law.go.kr.
+        """
+        q_lower = query.lower()
+        selected_keys = []
+
+        # Keyword mapping for relevant biological safety and biosecurity laws
+        if any(k in q_lower for k in ["감염병", "고위험병원체", "생물테러", "질병관리청", "보건", "분리신고"]):
+            selected_keys.append("감염병예방법")
+        if any(k in q_lower for k in ["화학무기", "생물무기", "생물작용제", "독소", "생화학", "산업부", "산자부", "ktr", "제조신고", "보유신고"]):
+            selected_keys.append("화학생물무기금지법")
+        if any(k in q_lower for k in ["유전자변형", "lmo", "연구시설", "ibc", "생물안전위원회", "개발실험", "과기부", "과기정통부", "시험연구"]):
+            selected_keys.append("유전자변형생물체법")
+        if any(k in q_lower for k in ["가축", "동물", "수의", "검역본부", "가축전염병"]):
+            selected_keys.append("가축전염병예방법")
+        if any(k in q_lower for k in ["수산", "어류", "수산생물", "수산질병", "국수품"]):
+            selected_keys.append("수산생물질병관리법")
+
+        # Fallback if no specific law keyword matched: provide the major regulatory frameworks
+        if not selected_keys:
+            selected_keys = ["감염병예방법", "화학생물무기금지법", "유전자변형생물체법"]
+
+        law_details = []
+        for law_key in selected_keys:
+            knowledge = CORE_LAWS_KNOWLEDGE.get(law_key, {})
+            full_name = knowledge.get("full_name", law_key)
+            realtime_meta = self.fetch_latest_law_metadata(full_name)
+
+            effective_date = realtime_meta.get("effective_date", "최신 시행") if realtime_meta else "최신 시행"
+            official_url = realtime_meta.get("link", knowledge.get("law_url")) if realtime_meta else knowledge.get("law_url")
+
+            law_details.append({
+                "law_key": law_key,
+                "full_name": full_name,
+                "short_name": knowledge.get("short_name", law_key),
+                "ministry": knowledge.get("ministry", "관계 부처"),
+                "effective_date": effective_date,
+                "url": official_url,
+                "items": knowledge.get("items", {}),
+                "practical_guide": knowledge.get("practical_guide", {}),
+                "precautions": knowledge.get("precautions", {})
+            })
+
+        return {
+            "query": query,
+            "applicable_laws": law_details
+        }
+
+    def format_general_law_context_for_prompt(self, law_data: Dict[str, Any]) -> str:
+        """
+        Formats legal provisions for general legal/procedural queries in an objective statutory format
+        without imposing the 8-item pathogen-specific template.
+        """
+        lines = []
+        lines.append("### [법제처(국가법령정보센터) 최신 법령 정보 및 조문·절차 데이터]")
+        lines.append(f"질의 키워드/주제: {law_data.get('query', '')}")
+        lines.append("")
+
+        for idx, law in enumerate(law_data.get("applicable_laws", []), 1):
+            lines.append(f"=== 관련 법률 {idx}: 《{law['full_name']}》 ({law['short_name']}) ===")
+            lines.append(f"- 소관 부처: {law['ministry']}")
+            lines.append(f"- 최신 시행일자: {law['effective_date']}")
+            lines.append(f"- 법제처 공식 법령 링크: {law['url']}")
+            lines.append("- 주요 법정 규정 및 조문별 요건:")
+            for item, desc in law.get("items", {}).items():
+                lines.append(f"  * {item}: {desc}")
+            lines.append("- 실무 가이드 및 접수처 정보:")
+            pg = law.get("practical_guide", {})
+            if pg:
+                lines.append(f"  * 신청/신고 시스템: {pg.get('system_name')} ({pg.get('system_url')})")
+                for step in pg.get("steps", []):
+                    lines.append(f"  * {step}")
+            lines.append("- 벌칙 및 법적 주의사항 (형사처벌, 행정처분, 양벌규정 등):")
+            precautions = law.get("precautions", {})
+            if precautions:
+                for p_key, p_desc in precautions.items():
+                    lines.append(f"  * [{p_key}]: {p_desc}")
+            else:
+                lines.append("  * 규정된 주요 벌칙 확인 필요")
+            lines.append("")
+
+        return "\n".join(lines)
+
