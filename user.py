@@ -735,166 +735,171 @@ def run_streamlit_app():
                 const dockBtn = dock.querySelector('#btn-dock-apply');
                 const dockDropdown = dock.querySelector('#pathogen-dock-dropdown');
 
-                if (dockInput && !dockInput._eventsAttached) {{
-                    dockInput._eventsAttached = true;
-                    let selectedIndex = -1;
+                if (!dockInput || !dockBtn || !dockDropdown) return;
 
-                    function getDropdownItems() {{
-                        return dockDropdown ? dockDropdown.querySelectorAll('.dock-dropdown-item') : [];
-                    }}
+                // Always rebind events with active iframe closures on every rerun/new chat
+                let selectedIndex = -1;
 
-                    function updateSelection(newIdx, scrollIntoView = true) {{
-                        const items = getDropdownItems();
-                        if (!items.length) {{
-                            selectedIndex = -1;
-                            return;
-                        }}
+                function getDropdownItems() {{
+                    return dockDropdown ? dockDropdown.querySelectorAll('.dock-dropdown-item') : [];
+                }}
 
-                        items.forEach((el, idx) => {{
-                            if (idx === newIdx) {{
-                                el.style.backgroundColor = '#DBEAFE';
-                                el.style.color = '#1D4ED8';
-                                el.style.fontWeight = '600';
-                            }} else {{
-                                el.style.backgroundColor = '#FFFFFF';
-                                el.style.color = '#1E293B';
-                                el.style.fontWeight = 'normal';
-                            }}
-                        }});
-
-                        selectedIndex = newIdx;
-
-                        if (selectedIndex >= 0 && selectedIndex < items.length) {{
-                            const activeEl = items[selectedIndex];
-                            if (scrollIntoView) {{
-                                activeEl.scrollIntoView({{ block: 'nearest' }});
-                            }}
-                        }}
-                    }}
-
-                    function applyValue(val) {{
-                        if (!val) return;
-                        const ta = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
-                        if (ta) {{
-                            const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value')?.set ||
-                                           Object.getOwnPropertyDescriptor(ta, 'value')?.set;
-                            if (setter) {{
-                                setter.call(ta, val);
-                            }} else {{
-                                ta.value = val;
-                            }}
-                            ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            ta.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                            ta.focus();
-                        }}
-                    }}
-
-                    function renderDropdown(filterVal = '') {{
+                function updateSelection(newIdx, scrollIntoView = true) {{
+                    const items = getDropdownItems();
+                    if (!items.length) {{
                         selectedIndex = -1;
-                        const q = (filterVal || '').trim().replace(/^['"]+|['"]+$/g, '').toLowerCase();
-                        let matches;
-                        if (!q) {{
-                            matches = allKeys;
-                        }} else {{
-                            const fullMatches = allKeys.filter(k => k.toLowerCase().includes(q));
-                            const prefix = fullMatches.filter(k => k.toLowerCase().startsWith(q));
-                            const others = fullMatches.filter(k => !k.toLowerCase().startsWith(q));
-                            matches = prefix.concat(others);
-                        }}
-
-                        if (matches.length === 0) {{
-                            dockDropdown.innerHTML = '<div style="padding: 10px 14px; color: #94A3B8; font-size: 12px;">일치하는 병원균 명칭이 없습니다.</div>';
-                        }} else {{
-                            dockDropdown.innerHTML = '';
-                            const headerRow = parentDoc.createElement('div');
-                            headerRow.style.cssText = 'padding: 6px 12px; background: #F1F5F9; color: #475569; font-size: 11px; font-weight: 600; border-bottom: 1px solid #E2E8F0; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center;';
-                            headerRow.innerHTML = q
-                                ? `<span>🔍 검색 결과</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 클릭 선택)</span>`
-                                : `<span>📋 전체 병원균/바이러스 목록</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 클릭 선택)</span>`;
-                            dockDropdown.appendChild(headerRow);
-
-                            matches.forEach((item, idx) => {{
-                                const row = parentDoc.createElement('div');
-                                row.className = 'dock-dropdown-item';
-                                row.dataset.index = idx;
-                                row.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #F1F5F9; color: #1E293B; line-height: 1.4; word-break: break-word; transition: background 0.1s;';
-                                row.textContent = item;
-                                row.addEventListener('mouseover', () => {{
-                                    updateSelection(idx, false);
-                                }});
-                                row.addEventListener('mousedown', (ev) => {{
-                                    ev.preventDefault();
-                                    dockInput.value = item;
-                                    applyValue(item);
-                                    dockDropdown.style.display = 'none';
-                                    selectedIndex = -1;
-                                }});
-                                dockDropdown.appendChild(row);
-                            }});
-                        }}
-                        dockDropdown.style.display = 'block';
+                        return;
                     }}
 
-                    dockInput.addEventListener('focus', () => renderDropdown(dockInput.value));
-                    dockInput.addEventListener('click', () => renderDropdown(dockInput.value));
-                    dockInput.addEventListener('input', (e) => renderDropdown(e.target.value));
+                    items.forEach((el, idx) => {{
+                        if (idx === newIdx) {{
+                            el.style.backgroundColor = '#DBEAFE';
+                            el.style.color = '#1D4ED8';
+                            el.style.fontWeight = '600';
+                        }} else {{
+                            el.style.backgroundColor = '#FFFFFF';
+                            el.style.color = '#1E293B';
+                            el.style.fontWeight = 'normal';
+                        }}
+                    }});
 
-                    dockInput.addEventListener('keydown', (e) => {{
-                        const items = getDropdownItems();
-                        const isOpen = dockDropdown && dockDropdown.style.display !== 'none';
+                    selectedIndex = newIdx;
 
-                        if (e.key === 'ArrowDown') {{
-                            e.preventDefault();
-                            if (!isOpen) {{
-                                renderDropdown(dockInput.value);
-                                updateSelection(0, true);
-                            }} else if (items.length > 0) {{
-                                let next = selectedIndex + 1;
-                                if (next >= items.length) next = 0;
-                                updateSelection(next, true);
-                            }}
-                        }} else if (e.key === 'ArrowUp') {{
-                            e.preventDefault();
-                            if (!isOpen) {{
-                                renderDropdown(dockInput.value);
-                                updateSelection(items.length - 1, true);
-                            }} else if (items.length > 0) {{
-                                let prev = selectedIndex - 1;
-                                if (prev < 0) prev = items.length - 1;
-                                updateSelection(prev, true);
-                            }}
-                        }} else if (e.key === 'Enter') {{
-                            e.preventDefault();
-                            if (isOpen && selectedIndex >= 0 && selectedIndex < items.length) {{
-                                const chosen = items[selectedIndex].textContent;
-                                dockInput.value = chosen;
-                                applyValue(chosen);
+                    if (selectedIndex >= 0 && selectedIndex < items.length) {{
+                        const activeEl = items[selectedIndex];
+                        if (scrollIntoView) {{
+                            activeEl.scrollIntoView({{ block: 'nearest' }});
+                        }}
+                    }}
+                }}
+
+                function applyValue(val) {{
+                    if (!val) return;
+                    const ta = parentDoc.querySelector('textarea[data-testid="stChatInputTextArea"]');
+                    if (ta) {{
+                        const setter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value')?.set ||
+                                       Object.getOwnPropertyDescriptor(ta, 'value')?.set;
+                        if (setter) {{
+                            setter.call(ta, val);
+                        }} else {{
+                            ta.value = val;
+                        }}
+                        ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        ta.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        ta.focus();
+                    }}
+                }}
+
+                function renderDropdown(filterVal = '') {{
+                    selectedIndex = -1;
+                    const q = (filterVal || '').trim().replace(/^['"]+|['"]+$/g, '').toLowerCase();
+                    let matches;
+                    if (!q) {{
+                        matches = allKeys;
+                    }} else {{
+                        const fullMatches = allKeys.filter(k => k.toLowerCase().includes(q));
+                        const prefix = fullMatches.filter(k => k.toLowerCase().startsWith(q));
+                        const others = fullMatches.filter(k => !k.toLowerCase().startsWith(q));
+                        matches = prefix.concat(others);
+                    }}
+
+                    if (matches.length === 0) {{
+                        dockDropdown.innerHTML = '<div style="padding: 10px 14px; color: #94A3B8; font-size: 12px;">일치하는 병원균 명칭이 없습니다.</div>';
+                    }} else {{
+                        dockDropdown.innerHTML = '';
+                        const headerRow = parentDoc.createElement('div');
+                        headerRow.style.cssText = 'padding: 6px 12px; background: #F1F5F9; color: #475569; font-size: 11px; font-weight: 600; border-bottom: 1px solid #E2E8F0; position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center;';
+                        headerRow.innerHTML = q
+                            ? `<span>🔍 검색 결과</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 클릭 선택)</span>`
+                            : `<span>📋 전체 병원균/바이러스 목록</span><span style="color: #2563EB;">총 ${{matches.length}}개 (방향키 ↑↓ / 클릭 선택)</span>`;
+                        dockDropdown.appendChild(headerRow);
+
+                        matches.forEach((item, idx) => {{
+                            const row = parentDoc.createElement('div');
+                            row.className = 'dock-dropdown-item';
+                            row.dataset.index = idx;
+                            row.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #F1F5F9; color: #1E293B; line-height: 1.4; word-break: break-word; transition: background 0.1s;';
+                            row.textContent = item;
+                            row.onmouseover = () => {{
+                                updateSelection(idx, false);
+                            }};
+                            row.onmousedown = (ev) => {{
+                                ev.preventDefault();
+                                dockInput.value = item;
+                                applyValue(item);
                                 dockDropdown.style.display = 'none';
                                 selectedIndex = -1;
-                            }} else if (dockInput.value.trim()) {{
-                                applyValue(dockInput.value.trim());
-                                if (dockDropdown) dockDropdown.style.display = 'none';
-                                selectedIndex = -1;
-                            }}
-                        }} else if (e.key === 'Escape') {{
+                            }};
+                            dockDropdown.appendChild(row);
+                        }});
+                    }}
+                    dockDropdown.style.display = 'block';
+                }}
+
+                // Property assignment guarantees fresh active listeners on rerun without stale dead closures
+                dockInput.onfocus = () => renderDropdown(dockInput.value);
+                dockInput.onclick = () => renderDropdown(dockInput.value);
+                dockInput.oninput = (e) => renderDropdown(e.target.value);
+
+                dockInput.onkeydown = (e) => {{
+                    const items = getDropdownItems();
+                    const isOpen = dockDropdown && dockDropdown.style.display !== 'none';
+
+                    if (e.key === 'ArrowDown') {{
+                        e.preventDefault();
+                        if (!isOpen) {{
+                            renderDropdown(dockInput.value);
+                            updateSelection(0, true);
+                        }} else if (items.length > 0) {{
+                            let next = selectedIndex + 1;
+                            if (next >= items.length) next = 0;
+                            updateSelection(next, true);
+                        }}
+                    }} else if (e.key === 'ArrowUp') {{
+                        e.preventDefault();
+                        if (!isOpen) {{
+                            renderDropdown(dockInput.value);
+                            updateSelection(items.length - 1, true);
+                        }} else if (items.length > 0) {{
+                            let prev = selectedIndex - 1;
+                            if (prev < 0) prev = items.length - 1;
+                            updateSelection(prev, true);
+                        }}
+                    }} else if (e.key === 'Enter') {{
+                        e.preventDefault();
+                        if (isOpen && selectedIndex >= 0 && selectedIndex < items.length) {{
+                            const chosen = items[selectedIndex].textContent;
+                            dockInput.value = chosen;
+                            applyValue(chosen);
+                            dockDropdown.style.display = 'none';
+                            selectedIndex = -1;
+                        }} else if (dockInput.value.trim()) {{
+                            applyValue(dockInput.value.trim());
                             if (dockDropdown) dockDropdown.style.display = 'none';
                             selectedIndex = -1;
                         }}
-                    }});
-
-                    dockBtn.addEventListener('click', (e) => {{
-                        e.preventDefault();
-                        applyValue(dockInput.value);
-                        dockDropdown.style.display = 'none';
+                    }} else if (e.key === 'Escape') {{
+                        if (dockDropdown) dockDropdown.style.display = 'none';
                         selectedIndex = -1;
-                    }});
-                    dockBtn.addEventListener('mouseover', () => {{ dockBtn.style.backgroundColor = '#1D4ED8'; }});
-                    dockBtn.addEventListener('mouseout', () => {{ dockBtn.style.backgroundColor = '#2563EB'; }});
+                    }}
+                }};
 
+                dockBtn.onclick = (e) => {{
+                    e.preventDefault();
+                    applyValue(dockInput.value);
+                    dockDropdown.style.display = 'none';
+                    selectedIndex = -1;
+                }};
+                dockBtn.onmouseover = () => {{ dockBtn.style.backgroundColor = '#1D4ED8'; }};
+                dockBtn.onmouseout = () => {{ dockBtn.style.backgroundColor = '#2563EB'; }};
+
+                if (!parentDoc._dockDismissAttached) {{
+                    parentDoc._dockDismissAttached = true;
                     parentDoc.addEventListener('mousedown', (e) => {{
-                        if (!dock.contains(e.target)) {{
-                            dockDropdown.style.display = 'none';
-                            selectedIndex = -1;
+                        const d = parentDoc.getElementById('st-pathogen-bottom-bar');
+                        const dd = parentDoc.getElementById('pathogen-dock-dropdown');
+                        if (d && dd && !d.contains(e.target)) {{
+                            dd.style.display = 'none';
                         }}
                     }});
                 }}
