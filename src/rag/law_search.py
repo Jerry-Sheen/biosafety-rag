@@ -59,7 +59,7 @@ CORE_LAWS_KNOWLEDGE = {
     "화학생물무기금지법": {
         "full_name": "화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률",
         "short_name": "생화학무기금지법",
-        "ministry": "산업통상자원부 (위탁/접수: 한국화학융합시험연구원 KTR)",
+        "ministry": "산업통상자원부 및 한국바이오협회",
         "law_url": "https://www.law.go.kr/법령/화학무기ㆍ생물무기의금지와특정화학물질ㆍ생물작용제등의제조ㆍ수출입규제등에관한법률",
         "items": {
             "분리신고": "해당없음 (생화학무기금지법령상 분리신고라는 별도 명칭의 규정은 없으나, 질병 진단/검사 목적 외에 분리하여 증식·보유할 경우 제조신고 또는 보유신고 대상이 됨)",
@@ -72,8 +72,8 @@ CORE_LAWS_KNOWLEDGE = {
             "인도신고": "시행령 제13조의2(인수ㆍ인도 신고) - 수입 또는 양도한 자가 생물작용제등을 상대방에게 실제로 넘겨줄 때 인도신고를 이행해야 함."
         },
         "practical_guide": {
-            "system_name": "산업통상자원부 생물작용제 및 독소 관리시스템 / 한국화학융합시험연구원(KTR)",
-            "system_url": "https://www.ktr.or.kr",
+            "system_name": "생물작용제 및 독소 통합관리시스템",
+            "system_url": "https://batims.or.kr/login",
             "steps": [
                 "Step 1 (사전 신고·허가): 제조 활동 시작 전 제조신고서 제출, 해외 도입 전 수입허가신청서(물품매도확약서, 사용계획서 등 첨부) 제출",
                 "Step 2 (통관 및 인수·인도): 세관 통관 후 물품 수령 시 인수신고서 제출, 국내 타 기관 양도 시 사전 양도신고 및 인도신고서 제출",
@@ -442,7 +442,7 @@ class LawSearchClient:
         # Keyword mapping for relevant biological safety and biosecurity laws
         if any(k in q_lower for k in ["감염병", "고위험병원체", "생물테러", "질병관리청", "보건", "분리신고"]):
             selected_keys.append("감염병예방법")
-        if any(k in q_lower for k in ["화학무기", "생물무기", "생물작용제", "독소", "생화학", "산업부", "산자부", "ktr", "제조신고", "보유신고", "25조", "제25조", "무기"]):
+        if any(k in q_lower for k in ["화학무기", "생물무기", "생물작용제", "독소", "생화학", "산업부", "산자부", "batims", "바이오협회", "제조신고", "보유신고", "25조", "제25조", "무기"]):
             selected_keys.append("화학생물무기금지법")
         if any(k in q_lower for k in ["유전자변형", "lmo", "연구시설", "ibc", "생물안전위원회", "개발실험", "과기부", "과기정통부", "시험연구"]):
             selected_keys.append("유전자변형생물체법")
