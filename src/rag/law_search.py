@@ -195,11 +195,32 @@ DEFAULT_CORE_ARTICLES = {
 
 
 LAW_SOURCE_PATTERNS = {
-    "화학생물무기금지법": ["화학무기ㆍ생물무기", "화학무기ᆞ생물무기"],
-    "감염병예방법": ["감염병의 예방 및 관리에 관한 법률(법률)"],
-    "유전자변형생물체법": ["유전자변형생물체의 국가간 이동 등에 관한 법률(법률)"],
-    "가축전염병예방법": ["가축전염병 예방법(법률)"],
-    "수산생물질병관리법": ["수산생물질병 관리법(법률)"]
+    "화학생물무기금지법": {
+        "법률": ["화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률(법률)", "화학무기ᆞ생물무기의 금지"],
+        "시행령": ["화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률 시행령"],
+        "시행규칙": ["화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률 시행규칙"]
+    },
+    "감염병예방법": {
+        "법률": ["감염병의 예방 및 관리에 관한 법률(법률)"],
+        "시행령": ["감염병의 예방 및 관리에 관한 법률 시행령"],
+        "시행규칙": ["감염병의 예방 및 관리에 관한 법률 시행규칙"]
+    },
+    "유전자변형생물체법": {
+        "법률": ["유전자변형생물체의 국가간 이동 등에 관한 법률(법률)"],
+        "시행령": ["유전자변형생물체의 국가간 이동 등에 관한 법률 시행령"],
+        "시행규칙": ["유전자변형생물체의 국가간 이동 등에 관한 법률 시행규칙"],
+        "통합고시": ["유전자변형생물체의 국가간 이동 등에 관한 통합고시"]
+    },
+    "가축전염병예방법": {
+        "법률": ["가축전염병 예방법(법률)"],
+        "시행령": ["가축전염병 예방법 시행령"],
+        "시행규칙": ["가축전염병 예방법 시행규칙"]
+    },
+    "수산생물질병관리법": {
+        "법률": ["수산생물질병 관리법(법률)"],
+        "시행령": ["수산생물질병 관리법 시행령"],
+        "시행규칙": ["수산생물질병 관리법 시행규칙"]
+    }
 }
 
 
@@ -207,7 +228,7 @@ class LawSearchClient:
     """Client for querying law.go.kr and generating grounded statutory contexts."""
 
     _law_articles_cache: Dict[str, List[Dict[str, Any]]] = {}
-    _local_law_articles_cache: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    _local_law_articles_cache: Dict[str, Dict[str, Dict[str, Dict[str, Any]]]] = {}
 
     @classmethod
     def _stitch_chunks(cls, chunk_texts: List[str]) -> str:
@@ -231,9 +252,9 @@ class LawSearchClient:
     @classmethod
     def _init_local_articles_from_chromadb(cls, chroma_path: str = "data/chroma_db") -> None:
         """
-        Auto-harvests statutory article texts from persistent ChromaDB chunks,
-        reconstructing clean full-article texts (e.g. Article 10 paragraphs 1 to 5)
-        and mapping them directly into an O(1) Key-Value dictionary.
+        Auto-harvests statutory article texts across all tiers (법률, 시행령, 시행규칙, 고시)
+        directly from persistent ChromaDB chunks, reconstructing clean full-article texts
+        and indexing them into an O(1) Key-Value dictionary: cache[law_key][tier][art_no].
         Zero manual JSON files required; 100% resilient to network and API blocks.
         """
         if cls._local_law_articles_cache:
@@ -245,43 +266,59 @@ class LawSearchClient:
             all_meta = col.get(include=["metadatas"])["metadatas"]
             all_sources = set(m.get("source", "") for m in all_meta)
 
-            for law_key, patterns in LAW_SOURCE_PATTERNS.items():
-                matched_sources = [s for s in all_sources if any(p in s for p in patterns)]
-                matched_sources.sort(reverse=True)
-                if not matched_sources:
-                    continue
-                target_src = matched_sources[0]
-                res = col.get(where={"source": target_src}, include=["documents", "metadatas"])
-                chunks = sorted(zip(res["documents"], res["metadatas"]), key=lambda x: x[1].get("chunk_index", 0))
-                stitched = cls._stitch_chunks([d for d, m in chunks])
-                cleaned = re.sub(r'--- Page \d+ ---\s*', '', stitched)
-                cleaned = re.sub(r'법제처\s+\d+\s+국가법령정보센터\s*.*?\n', '', cleaned)
+            for law_key, tiers in LAW_SOURCE_PATTERNS.items():
+                if law_key not in cls._local_law_articles_cache:
+                    cls._local_law_articles_cache[law_key] = {}
 
-                splits = re.split(r'(?:\n|\r\n)(?=제\s*\d+(?:조(?:의\s*\d+)?)?\s*\([^)]+\))', cleaned)
-                art_dict = {}
-                for sec in splits:
-                    sec = sec.strip()
-                    m = re.match(r'제\s*(\d+)(?:조(?:의\s*(\d+))?)\s*\(([^)]+)\)', sec)
-                    if m:
-                        main_no = m.group(1)
-                        sub_no = m.group(2)
-                        key = f"{main_no}의{sub_no}" if sub_no else main_no
-                        title = m.group(3).strip()
-                        art_dict[key] = {
-                            "no": key,
-                            "title": f"제{key}조({title})",
-                            "text": sec
-                        }
-                cls._local_law_articles_cache[law_key] = art_dict
-                logger.info(f"Auto-indexed {len(art_dict)} statutory articles for '{law_key}' directly from ChromaDB.")
+                for tier, patterns in tiers.items():
+                    matched_sources = [s for s in all_sources if any(p in s for p in patterns)]
+                    matched_sources.sort(reverse=True)
+                    if not matched_sources:
+                        continue
+                    target_src = matched_sources[0]
+                    res = col.get(where={"source": target_src}, include=["documents", "metadatas"])
+                    chunks = sorted(zip(res["documents"], res["metadatas"]), key=lambda x: x[1].get("chunk_index", 0))
+                    stitched = cls._stitch_chunks([d for d, m in chunks])
+                    cleaned = re.sub(r'--- Page \d+ ---\s*', '', stitched)
+                    cleaned = re.sub(r'법제처\s+\d+\s+국가법령정보센터\s*.*?\n', '', cleaned)
+
+                    # Support standard articles (제14조) as well as dashed notice articles (제1-1조)
+                    splits = re.split(r'(?:(?<=\.)\s+|(?<=\])\s+|\n|\r\n)(?=제\s*(?:\d+-\d+|\d+)(?:조(?:의\s*\d+)?)?\s*\([^)]+\))', cleaned)
+                    art_dict = {}
+                    for sec in splits:
+                        sec = sec.strip()
+                        m = re.match(r'제\s*(\d+-\d+|\d+)(?:조(?:의\s*(\d+))?)\s*\(([^)]+)\)', sec)
+                        if m:
+                            main_no = m.group(1)
+                            sub_no = m.group(2)
+                            key = f"{main_no}의{sub_no}" if sub_no else main_no
+                            title = m.group(3).strip()
+                            art_dict[key] = {
+                                "no": key,
+                                "title": f"제{key}조({title})",
+                                "text": sec
+                            }
+                    cls._local_law_articles_cache[law_key][tier] = art_dict
+                    logger.info(f"Auto-indexed {len(art_dict)} statutory articles for '{law_key}' tier '{tier}' directly from ChromaDB.")
         except Exception as e:
             logger.warning(f"Failed to auto-index statutory articles from ChromaDB: {e}")
 
     @staticmethod
+    def detect_law_tier(query: str) -> str:
+        """Determines statutory tier (법률, 시행령, 시행규칙, 통합고시) from user query."""
+        if any(k in query for k in ["시행규칙", "부령"]) or "규칙" in query:
+            return "시행규칙"
+        if any(k in query for k in ["시행령", "대통령령"]) or "령" in query:
+            return "시행령"
+        if any(k in query for k in ["통합고시", "고시"]):
+            return "통합고시"
+        return "법률"
+
+    @staticmethod
     def extract_queried_article_numbers(query: str) -> List[str]:
-        """Extracts article numbers like '제10조', '10조', '제10조의2', '4조의2'."""
+        """Extracts article numbers like '제10조', '10조', '제10조의2', '4조의2', '제1-1조'."""
         nos = []
-        for m in re.finditer(r'제?\s*(\d+)(?:\s*조(?:의\s*(\d+))?|\s*의\s*(\d+)\s*조)', query):
+        for m in re.finditer(r'제?\s*(\d+(?:-\d+)?)(?:\s*조(?:의\s*(\d+))?|\s*의\s*(\d+)\s*조)', query):
             main = m.group(1)
             sub = m.group(2) or m.group(3)
             key = f"{main}의{sub}" if sub else main
@@ -371,37 +408,43 @@ class LawSearchClient:
         self,
         mst: str = "",
         query: str = "",
-        law_key: str = ""
+        law_key: str = "",
+        tier: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Extracts verbatim law articles matching specific article numbers
         (e.g. '제10조', '제10조의2', '제25조') or defaults using O(1) Key-Value matching
-        from persistent ChromaDB auto-indexed store (or fallback to law.go.kr API).
+        from persistent ChromaDB auto-indexed store across 3 tiers (법률, 시행령, 시행규칙, 고시).
         """
         # Ensure ChromaDB in-memory law store is initialized
         self._init_local_articles_from_chromadb()
-        local_store = self._local_law_articles_cache.get(law_key, {})
+        law_tiers = self._local_law_articles_cache.get(law_key, {})
+
+        detected_tier = tier or self.detect_law_tier(query)
+        # Select local store for the detected tier; fallback to '법률' if tier not indexed
+        local_store = law_tiers.get(detected_tier) or law_tiers.get("법률", {})
 
         matched = []
         seen_nos = set()
         explicit_nos = self.extract_queried_article_numbers(query)
 
-        # 1) If user queried specific article numbers (e.g. '제10조', '제10조의2')
+        # 1) If user queried specific article numbers (e.g. '제14조', '제10조', '제5조의2')
         if explicit_nos:
             for art_no in explicit_nos:
                 if art_no in local_store:
                     matched.append(local_store[art_no])
                     seen_nos.add(art_no)
                 else:
-                    # Explicit fact-check: article does NOT exist in statutory framework
+                    # Explicit fact-check: article does NOT exist in requested tier
                     law_name = CORE_LAWS_KNOWLEDGE.get(law_key, {}).get("full_name", law_key)
+                    tier_display = f" {detected_tier}" if detected_tier != "법률" else ""
                     matched.append({
                         "no": art_no,
                         "title": f"【조문 실존 팩트체크】 제{art_no}조",
                         "text": (
                             f"【법제처 공식 법령 조문 팩트체크 (영구 벡터 DB 전문 검증)】\n"
-                            f"《{law_name}》 본조에는 '제{art_no}조'라는 조문이 실제로 존재하지 않습니다. (제10조(폐기) 바로 다음 조문은 제11조(수출규제)입니다)\n"
-                            f"※ 관련 실무 규정 안내: 생물작용제의 양도·이동신고는 '법률 제10조 제2항' 및 '시행규칙 제5조의2(양도신고)'에 명시되어 있습니다."
+                            f"《{law_name}{tier_display}》 본조에는 '제{art_no}조'라는 조문이 실제로 존재하지 않습니다.\n"
+                            f"※ 관련 법령 체계 안내: 해당 법률의 상위/하위 법령(법률, 시행령, 시행규칙) 또는 유관 조문 번호를 재확인하시기 바랍니다."
                         )
                     })
                     seen_nos.add(art_no)
@@ -473,7 +516,8 @@ class LawSearchClient:
             official_url = realtime_meta.get("link", knowledge.get("law_url")) if realtime_meta else knowledge.get("law_url")
             mst = realtime_meta.get("mst", "") if realtime_meta else ""
 
-            verbatim_articles = self.get_relevant_articles(mst=mst, query=query, law_key=law_key)
+            tier = self.detect_law_tier(query)
+            verbatim_articles = self.get_relevant_articles(mst=mst, query=query, law_key=law_key, tier=tier)
 
             law_details.append({
                 "law_key": law_key,
@@ -578,7 +622,8 @@ class LawSearchClient:
             official_url = realtime_meta.get("link", knowledge.get("law_url")) if realtime_meta else knowledge.get("law_url")
             mst = realtime_meta.get("mst", "") if realtime_meta else ""
 
-            verbatim_articles = self.get_relevant_articles(mst=mst, query=query, law_key=law_key)
+            tier = self.detect_law_tier(query)
+            verbatim_articles = self.get_relevant_articles(mst=mst, query=query, law_key=law_key, tier=tier)
 
             law_details.append({
                 "law_key": law_key,

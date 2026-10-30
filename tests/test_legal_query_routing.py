@@ -59,3 +59,31 @@ def test_verbatim_article_25_extraction():
     assert "사형, 무기 또는 7년 이상의 징역" in formatted
     assert "무기(無期) 또는 5년 이상의 징역이나 1억원 이하의 벌금" in formatted
 
+
+def test_statutory_tier_differentiation():
+    """Verify system distinguishes between 법률, 시행령, and 시행규칙 for identical article numbers."""
+    client = LawSearchClient()
+
+    # 1. 감염병예방법 시행규칙 제14조 -> 감염병 표본감시기관의 지정 등
+    rule_res = client.search_laws_for_general_query("감염병예방법 시행규칙 제14조에 대해 설명해줘")
+    rule_formatted = client.format_general_law_context_for_prompt(rule_res)
+    assert "제14조(감염병 표본감시기관의 지정 등)" in rule_formatted
+    assert "표본감시기관" in rule_formatted
+    assert "인수공통감염병의 통보" not in rule_formatted
+
+    # 2. 감염병예방법(법률) 제14조 -> 인수공통감염병의 통보
+    law_res = client.search_laws_for_general_query("감염병예방법 제14조에 대해 설명해줘")
+    law_formatted = client.format_general_law_context_for_prompt(law_res)
+    assert "제14조(인수공통감염병의 통보)" in law_formatted
+    assert "가축전염병예방법" in law_formatted
+    assert "표본감시기관" not in law_formatted
+
+    # 3. 감염병예방법 시행규칙 제16조의2 -> 역학조사의 요청 등 (줄바꿈 없이 붙어있던 조문 분리 검증)
+    rule_16_2_res = client.search_laws_for_general_query("감염병예방법 시행규칙 16조의 2에 대해 설명해줘.")
+    rule_16_2_formatted = client.format_general_law_context_for_prompt(rule_16_2_res)
+    assert "역학조사의 요청 등" in rule_16_2_formatted
+    assert "별지 제6호의2서식" in rule_16_2_formatted
+    assert "실제로 존재하지 않습니다" not in rule_16_2_formatted
+
+
+
