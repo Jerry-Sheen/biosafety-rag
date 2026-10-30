@@ -30,27 +30,42 @@ PATHOGEN_SYSTEM_PROMPT = """당신은 법령 검색 및 규제 안내 전문가�
 사용자가 특정 병원균/바이러스/생물작용제/독소에 대해 질문할 때, [1단계: 영구 벡터 DB 기반 적용 법령 및 규제 대상 현황]은 시스템에 의해 사전에 100% 정밀 검증되어 사용자 화면에 이미 직접 출력되었습니다.
 
 따라서 당신은 1단계를 절대로 다시 출력하거나 요약·반복하지 마십시오.
-당신의 답변은 반드시 바로 아래의 [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]부터 시작해야 합니다.
+당신의 답변은 반드시 바로 아래의 [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 10대 항목 및 실무 가이드 절차]부터 시작해야 합니다.
 
-[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차 작성 규칙]
+[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 10대 항목 및 실무 가이드 절차 작성 규칙]
 - 1단계에서 '해당'으로 확인된 모든 적용 법률(예: 《감염병의 예방 및 관리에 관한 법률》, 《화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률》, 《유전자변형생물체의 국가간 이동 등에 관한 법률》, 《가축전염병 예방법》, 《수산생물질병 관리법》 등)에 대해 빠짐없이 각각 독립된 하위 섹션(### [법률명])을 나누어 작성하세요.
 - 적용되는 각 법률마다 반드시 아래의 3대 카테고리를 순서대로 구성하여 작성해야 합니다:
-  1. 8대 필수 항목별 규제 요건
-     (1. 분리신고 ~ 8. 인도신고를 하나도 빠짐없이 순서대로 설명. 해당 법률에서 특정 항목 규정이 없는 경우 반드시 '해당없음'과 이유 명시)
+  1. 10대 필수 항목별 규제 요건
+     (• [**분리신고**], • [**이동(분양)신고**], • [**보유신고**], • [**폐기신고**], • [**제조신고**], • [**개발실험승인**], • [**수입(반입)신고**], • [**인수신고**], • [**수출신고**], • [**인도신고**]의 10개 항목 전체를 하나도 빠뜨리지 말고 순서대로 모두 개별적으로 작성할 것. 특히 '• [**인도신고**]'를 절대로 누락하지 마십시오!)
+     ★ [법조문 번호 원문 유지 및 불릿·대괄호 볼드(• [**항목명**]:) 작성 필수 규칙 - 5대 법률 전체 공통]:
+     - 각 항목 서술 시 숫자는 사용하지 말고 반드시 '•' 기호와 대괄호 [ ], 그리고 안의 글자는 볼드체(**)를 적용하여 '• [**항목명**]: ' 형태로 작성하십시오.
+     - 각 항목 서술 시 시스템 컨텍스트에 제공된 [법제처 최신 법령 검색 및 법률별 규제·절차 데이터]의 구체적인 법조문 명칭과 번호(예: 법 제○조, 시행령 제○조, 시행규칙 제○조, 통합고시 제○조 등)를 절대로 누락·생략하거나 임의로 단순 요약하지 말고 원문 그대로 명시하십시오.
+     - 각 항목은 절대로 한 줄로 합쳐 쓰지 말고, 반드시 각각 독립된 줄로 개행하여 작성하십시오:
+       예시:
+       • [**분리신고**]: [구체적 법조문 번호 및 요건]
+       • [**이동(분양)신고**]: [구체적 법조문 번호 및 요건]
+       • [**보유신고**]: [구체적 법조문 번호 및 요건]
+       • [**폐기신고**]: [구체적 법조문 번호 및 요건]
+       • [**제조신고**]: [구체적 법조문 번호 또는 해당없음 사유]
+       • [**개발실험승인**]: [구체적 법조문 번호 및 요건]
+       • [**수입(반입)신고**]: [구체적 법조문 번호 및 요건]
+       • [**인수신고**]: [구체적 법조문 번호 및 요건]
+       • [**수출신고**]: [구체적 법조문 번호 및 요건]
+       • [**인도신고**]: [구체적 법조문 번호 및 요건]
   2. 실무 가이드 절차
      (소관 부처, 신청/신고 시스템 포털명 및 URL, 단계별 절차 Step 1~3, 구비서류 등)
-     (★ 중요: '2. 실무 가이드 절차' 다음 줄에는 안내사항 문구를 절대 작성하지 마십시오. 안내사항 문구는 '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]' 대제목 바로 아래 줄에만 1번 나타나야 합니다.)
+     (★ 중요: '2. 실무 가이드 절차' 다음 줄에는 안내사항 문구를 절대 작성하지 마십시오. 안내사항 문구는 '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 10대 항목 및 실무 가이드 절차]' 대제목 바로 아래 줄에만 1번 나타나야 합니다.)
   3. 주의사항
      (형사처벌, 양벌 규정 등 벌칙과 행정처분 내용, 보관 및 운송 규정, 위험물질 취급 제한 등 연구자가 반드시 숙지해야 할 주의사항을 작성하여 항상 포함할 것. 해당사항이 없을 경우 반드시 '해당사항 없음'이라고 명시)
 
 [작성 주의사항]
 - 모델 자체의 편향된 상식으로 법률을 임의로 누락하거나 '해당없음'으로 왜곡하지 마십시오. 1단계에서 '해당'으로 명시된 법률은 2단계에서도 반드시 독립된 법률 섹션을 포함해야 합니다. 특히 《수산생물질병 관리법》은 해양수산부(국립수산물품질관리원) 소관이며, 제1~3종 수산생물전염병 원인체에 대해 연구용 수입허가(법 제24조), 수입검역(제27조), 병원체 분리신고(제13조), 이동제한(제15조), 살처분·폐기(제16조/제17조) 등의 엄격한 규제가 적용되므로 8대 항목에 이를 구체적으로 명시해야 합니다.
-- 8대 필수 항목별 규제 요건 작성 시, 시스템 컨텍스트에 제공된 [법제처 최신 법령 검색 및 법률별 규제·절차 데이터]의 법조문 번호와 의무 요건을 엄격히 준수하십시오:
+- 10대 필수 항목별 규제 요건 작성 시, 시스템 컨텍스트에 제공된 [법제처 최신 법령 검색 및 법률별 규제·절차 데이터]의 법조문 번호와 의무 요건을 엄격히 준수하십시오:
   * 생화학무기금지법의 '인수신고'는 반드시 법 제12조제2항(수입허가 물품 국내 반입 수령 신고)을 근거로 기술하십시오 (법 제8조 제조허가 취소 조문 인용 절대 금지).
-  * 생화학무기금지법의 '인도신고'는 법 제11조제2항에 규정된 법정 필수 의무이므로, 절대로 임의로 '해당없음'이나 '갈음'으로 왜곡하지 마십시오.
+  * 생화학무기금지법의 '인도신고'는 법 제11조제2항에 규정된 법정 필수 의무이므로, 절대로 답변에서 누락하거나 임의로 '해당없음'이나 '갈음'으로 왜곡하지 마십시오. 8개 항목의 마지막인 '8. 인도신고'까지 반드시 작성해야 합니다.
   * 생화학무기금지법의 '수출'은 법 제11조에 따른 사전 '허가(수출허가)' 사항이며, '폐기'는 법 제10조제3항에 따른 사전 '신고(폐기신고)' 사항임을 명확히 구분하여 작성하십시오.
 - 법제처 웹사이트의 최신 법령(조항 번호, 시행일자)을 반영하여 핵심 내용을 알기 쉽게 요약하세요. 법령 원문을 그대로 복사하지 마세요.
-- 적용되는 법률들을 하나로 뭉뚱그려 설명하지 말고, 반드시 법률별로 각각 8대 항목, 실무 가이드 절차, 주의사항을 명확하게 분리하여 작성해야 합니다.
+- 적용되는 법률들을 하나로 뭉뚱그려 설명하지 말고, 반드시 법률별로 각각 10대 항목, 실무 가이드 절차, 주의사항을 명확하게 분리하여 작성해야 합니다.
 """
 
 LEGAL_EXPERT_SYSTEM_PROMPT = """당신은 대한민국 바이오안보 및 생물안전 관련 법령 체계(《감염병의 예방 및 관리에 관한 법률》, 《화학무기ㆍ생물무기의 금지와 특정화학물질ㆍ생물작용제 등의 제조ㆍ수출입 규제 등에 관한 법률》, 《유전자변형생물체의 국가간 이동 등에 관한 법률》, 《가축전염병 예방법》, 《수산생물질병 관리법》, 《연구실 안전환경 조성에 관한 법률》 등)에 정통한 대한민국 최고 권위의 '법률전문가이자 법학대학 교수, 전문 변호사'입니다.
@@ -58,18 +73,15 @@ LEGAL_EXPERT_SYSTEM_PROMPT = """당신은 대한민국 바이오안보 및 생�
 사용자가 특정 병원균/바이러스/위험균/생물작용제/독소 명칭의 단순 조회가 아니라, 법, 제도, 인허가·신고 절차, 규제 요건, 안전기준, 위반 시 제재 등에 관해 질의했을 때의 전문 법률 자문 답변 지침입니다.
 
 [핵심 작성 원칙]
-1. [특정 병원체 8대 항목 템플릿 사용 절대 금지]:
-   - 특정 병원체 검색 시 사용되는 획일적이고 규격화된 틀(예: '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]' 대제목, '8대 필수 항목별 규제 요건', '[분리신고] ~ [인도신고]' 8대 항목의 기계적 나열 등)을 절대로 사용하지 마십시오.
+1. [특정 병원체 10대 항목 템플릿 사용 절대 금지]:
+   - 특정 병원체 검색 시 사용되는 획일적이고 규격화된 틀(예: '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 10대 항목 및 실무 가이드 절차]' 대제목, '10대 필수 항목별 규제 요건', '[분리신고] ~ [인도신고]' 10대 항목의 기계적 나열 등)을 절대로 사용하지 마십시오.
 2. [법제처 사이트 법령 내용에 기초한 엄정한 법적 근거]:
    - 법제처 국가법령정보센터(law.go.kr)의 최신 법령(법률, 시행령, 시행규칙, 행정규칙/고시) 조문 및 제공된 관련 규정·지침 문서의 내용만을 유일하고 엄격한 근거로 삼아 답변하십시오. 법적 근거 없는 자의적 추측을 배제하십시오.
-3. [자율적인 마크다운 형식의 전문 법률 자문 답변]:
-   - '법률전문가', '법학대학 교수', '변호사'로서 사용자의 질문 취지와 핵심 쟁점에 가장 적합한 논리적이고 체계적인 마크다운 구조로 자율적이고 유연하게 답변을 구성하십시오.
-   - 예시 권장 목차 구조 (질문의 쟁점에 맞춰 자율적으로 목차를 구성하되 체계적으로 서술할 것):
-     * ## 1. 법적 개요 및 핵심 쟁점 (Legal Summary)
-     * ## 2. 관련 법령 체계 및 핵심 법조문 (Statutory Provisions)
-     * ## 3. 상세 요건 및 인허가·신고 실무 절차 (Procedural & Substantive Requirements)
-     * ## 4. 위반 시 법적 제재 및 책임 (Penalties & Legal Liabilities)
-     * ## 5. 법률전문가(변호사) 실무 자문 및 유의사항 (Legal Counsel's Advisory)
+3. [형식적 고정 틀 배제 및 자유롭고 명쾌한 맞춤형 서술]:
+   - '1. 법적 개요 및 핵심 쟁점', '2. 관련 법령 체계', '3. 상세 요건', '4. 위반 시 법적 제재', '5. 변호사 실무 자문' 등 천편일률적이고 형식적인 5단계 고정 목차를 절대로 기계적으로 나열하지 마십시오.
+   - 억지스러운 목차 채우기나 동일 내용의 중복(예: 법조문 소개 후 위반 제재에서 똑같은 형벌 단순 반복)을 전면 배제하십시오.
+   - 질문자가 질의한 핵심 쟁점(예: '처벌 및 행정처분', '신고 기한과 구비 서류', '인허가 요건' 등)에 대해 즉시 본론으로 들어가 직접적이고 명쾌하게 답변하십시오.
+   - 질의 내용의 성격에 맞춰 가장 읽기 편하고 체계적인 소제목(마크다운), 불릿 포인트, 위반 행위별 처벌 비교 표(Table) 등을 자유롭고 유연하게 활용하여 실질적이고 깊이 있는 정보가 생략 없이 온전히 전달되도록 하십시오.
 4. [정확한 조항 번호 및 실무 명시]:
    - 반드시 관련 법률명과 구체적인 조항 번호(예: 제○조 제○항), 소관 부처(질병관리청, 산업통상자원부, 과학기술정보통신부, 농림축산식품부, 해양수산부 등), 인허가 신청 기관, 처리 절차, 구비서류, 위반 시 벌칙 및 행정처분(징역, 벌금, 과태료, 시설폐쇄 등)을 명확하게 명시하십시오.
 5. [조문 번호의 실존 여부 확인 및 무단 환각 방지]:
@@ -323,7 +335,7 @@ PRACTICAL_GUIDE_NOTICE = ":red[**안내사항 : 아래 법적 사항 및 실무 
 
 def inject_practical_guide_notice(text: str) -> str:
     """
-    '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]' 대제목 바로 아래에만
+    '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 10대 항목 및 실무 가이드 절차]' 대제목 바로 아래에만
     붉은색 볼드체 안내문구를 단 1회 삽입하고, '2. 실무 가이드 절차' 하위나 본문 어디에도 안내문구가 중복되지 않도록 정리합니다.
     """
     if not text:
@@ -347,12 +359,120 @@ def inject_practical_guide_notice(text: str) -> str:
     if step2_pattern.search(cleaned_text):
         result = step2_pattern.sub(r"\1\n" + PRACTICAL_GUIDE_NOTICE + "\n\n", cleaned_text, count=1)
     else:
-        # 대제목이 명시적으로 발견되지 않는 경우에만 최상단에 1회 배치
-        result = f"{PRACTICAL_GUIDE_NOTICE}\n\n{cleaned_text}"
+        # [2단계: ...] 대제목이 없는 일반 법령/제도/절차 질문은 안내사항 배너를 상단에 강제하지 않고 순수 답변을 유지
+        result = cleaned_text
 
     # 불필요한 연속 3줄 이상의 개행 정리
     result = re.sub(r"\n{3,}", "\n\n", result)
+    result = format_bullet_subitems(result)
     return result
+
+
+def normalize_red_formatting(text: str) -> str:
+    """
+    Streamlit 붉은색 마크다운 문법(:red[**...**])이 텍스트 복사/전송 시 콜론이 빠져
+    'red[...]' 형태로 깨져서 일반 텍스트로 노출되는 현상을 완벽히 복원합니다.
+    """
+    if not text:
+        return text
+    # 1. red[**...**] (콜론 누락 복원) -> :red[**...**]
+    text = re.sub(r'(?<![:\w])red\[\*\*(.*?)\*\*\]', r':red[**\g<1>**]', text)
+    # 2. red[...] (콜론 및 볼드 누락 복원) -> :red[**...**]
+    text = re.sub(r'(?<![:\w])red\[(.*?)\]', r':red[**\g<1>**]', text)
+    # 3. :red[...] (볼드 누락 복원) -> :red[**...**]
+    text = re.sub(r':red\[(?!\*\*)(.*?)(?<!\*\*)\]', r':red[**\g<1>**]', text)
+    return text
+
+
+def format_bullet_subitems(text: str) -> str:
+    """
+    10대 필수 항목별 규제 요건(분리신고, 이동(분양)신고, 보유신고, 폐기신고, 제조신고,
+    개발실험승인, 수입(반입)신고, 인수신고, 수출신고, 인도신고)에서 숫자를 제외하고
+    '• [**항목명**]: ' 대괄호 및 볼드체 불릿 기호로 통일하며, 행 끝 2칸 공백('  \n')을 적용하여
+    브라우저에서 10개 항목 모두 각각 100% 독립된 줄로 완벽히 렌더링되도록 보장합니다.
+    """
+    if not text:
+        return text
+
+    # 1. 붉은색 마크다운 깨짐 정규화
+    text = normalize_red_formatting(text)
+
+    # 2. '8대 필수 항목별 규제 요건' -> '10대 필수 항목별 규제 요건' 자동 변환
+    text = re.sub(r'8대\s*필수\s*항목별\s*규제\s*요건', '10대 필수 항목별 규제 요건', text)
+
+    # 3. 구버전 8대 항목 스타일(보유·폐기, 제조·개발실험)로 합쳐져 있는 경우 분리
+    pat_hold_disp = re.compile(
+        r'([ \t]*)(?:(?:\d+\.\s*)?(?:\*\*)?보유[·\s/]*폐기신고(?:\*\*)?[:：]?[\s\t\r\n]*)'
+        r'(?:[•\-\*][ \t]*)?(?:\[[ \t]*(?:\*\*)?)?보유[은는\s]*(?:(?:\*\*)?[ \t]*\])?[:：]?[ \t]*(.*?)\s*'
+        r'(?:[•\-\*][ \t]*)?(?:\[[ \t]*(?:\*\*)?)?폐기[은는\s]*(?:(?:\*\*)?[ \t]*\])?[:：]?[ \t]*(.*?)(?=(?:\n[ \t]*(?:\d+\.|\*|\-|\#|\[|•|제조신고)|\Z))',
+        re.DOTALL
+    )
+    def repl_hold_disp(m):
+        indent = m.group(1)
+        hold_c = re.sub(r'[\r\n]+', ' ', m.group(2).strip().rstrip(';'))
+        disp_c = re.sub(r'[\r\n]+', ' ', m.group(3).strip())
+        return f'{indent}• [**보유신고**]: {hold_c}  \n{indent}• [**폐기신고**]: {disp_c}'
+
+    text = pat_hold_disp.sub(repl_hold_disp, text)
+
+    pat_mfg_dev = re.compile(
+        r'([ \t]*)(?:(?:\d+\.\s*)?(?:\*\*)?제조신고\s*(?:및\s*)?개발실험승인(?:\*\*)?[:：]?[\s\t\r\n]*)'
+        r'(?:[•\-\*][ \t]*)?(?:\[[ \t]*(?:\*\*)?)?제조신고[은는\s]*(?:(?:\*\*)?[ \t]*\])?[:：]?[ \t]*(.*?)\s*'
+        r'(?:[•\-\*][ \t]*)?(?:\[[ \t]*(?:\*\*)?)?(?:개발실험(?:승인)?)[은는\s]*(?:(?:\*\*)?[ \t]*\])?[:：]?[ \t]*(.*?)(?=(?:\n[ \t]*(?:\d+\.|\*|\-|\#|\[|•|수입)|\Z))',
+        re.DOTALL
+    )
+    def repl_mfg_dev(m):
+        indent = m.group(1)
+        mfg_c = re.sub(r'[\r\n]+', ' ', m.group(2).strip().rstrip(';'))
+        dev_c = re.sub(r'[\r\n]+', ' ', m.group(3).strip())
+        return f'{indent}• [**제조신고**]: {mfg_c}  \n{indent}• [**개발실험승인**]: {dev_c}'
+
+    text = pat_mfg_dev.sub(repl_mfg_dev, text)
+
+    # 4. 10대 항목명 리스트
+    target_items = [
+        r'분리신고',
+        r'이동\(분양\)신고|이동신고|분양신고',
+        r'보유신고',
+        r'폐기신고',
+        r'제조신고',
+        r'개발실험승인|개발실험',
+        r'수입\(반입\)신고|수입신고|반입신고|반입허가',
+        r'인수신고',
+        r'수출신고|수출허가',
+        r'인도신고',
+    ]
+    combined = '|'.join(target_items)
+
+    # 5. 인라인으로 이어지거나 숫자가 붙은 항목들을 강제 줄바꿈 및 '• [**항목명**]: ' 형태로 통일
+    # 5-1. 한 줄 안에서 이어지는 경우 앞에 강제 개행(\n) 삽입
+    text = re.sub(
+        rf'([^\n])\s*(?:[•\-\*]|\d+\.)?[ \t]*(?:\[[ \t]*(?:\*\*)?)?({combined})(?:(?:\*\*)?[ \t]*\])?\s*[:：][ \t]*',
+        r'\1  \n• [**\2**]: ',
+        text
+    )
+    # 5-2. 줄 첫머리의 숫자 번호나 불릿을 '• [**항목명**]: '으로 통일
+    text = re.sub(
+        rf'(\n[ \t]*)(?:[•\-\*]|\d+\.)?[ \t]*(?:\[[ \t]*(?:\*\*)?)?({combined})(?:(?:\*\*)?[ \t]*\])?\s*[:：][ \t]*',
+        r'\1• [**\2**]: ',
+        text
+    )
+
+    # 6. 불릿 라인의 끝에 마크다운 강제 개행 공백 2칸('  ') 보장
+    lines = text.split('\n')
+    new_lines = []
+    for line in lines:
+        if line.strip().startswith('•'):
+            new_lines.append(line.rstrip() + '  ')
+        else:
+            new_lines.append(line)
+    text = '\n'.join(new_lines)
+
+    # 7. 콜론 중복 정리 (단, :red[ 등 Streamlit 마크다운 태그는 온전히 보존)
+    text = re.sub(r':\s*:(?!red\[)', ': ', text)
+    text = normalize_red_formatting(text)
+    return text
+
 
 class ConversationalRAGEngine:
     """End-to-end conversational RAG pipeline using Google Gemini API or OpenAI."""
@@ -488,31 +608,30 @@ class ConversationalRAGEngine:
         finally:
             executor.shutdown(wait=False)
 
-        # Step 2-B: If pathogen was not found in registry, fallback to ChromaDB exact chunk search
-        if not pathogen_info:
-            direct_pathogen_chunk = self.vector_store.find_pathogen_chunk(query)
-            if not direct_pathogen_chunk and search_query != query:
-                direct_pathogen_chunk = self.vector_store.find_pathogen_chunk(search_query)
+        # Step 2-B: Ensure authoritative pathogen source chunk is always included in retrieved_chunks
+        direct_pathogen_chunk = self.vector_store.find_pathogen_chunk(query)
+        if not direct_pathogen_chunk and search_query != query:
+            direct_pathogen_chunk = self.vector_store.find_pathogen_chunk(search_query)
 
-            if direct_pathogen_chunk:
-                retrieved_chunks = [ch for ch in retrieved_chunks if ch.get("text") != direct_pathogen_chunk["text"]]
-                retrieved_chunks.insert(0, direct_pathogen_chunk)
-            else:
-                exact_chunk_idx = -1
-                for idx, ch in enumerate(retrieved_chunks):
-                    if PersistentVectorStore._is_exact_pathogen_match(query, ch.get("text", "")):
-                        exact_chunk_idx = idx
-                        break
-                if exact_chunk_idx > 0:
-                    exact_chunk = retrieved_chunks.pop(exact_chunk_idx)
-                    retrieved_chunks.insert(0, exact_chunk)
+        if direct_pathogen_chunk:
+            retrieved_chunks = [ch for ch in retrieved_chunks if ch.get("text") != direct_pathogen_chunk["text"]]
+            retrieved_chunks.insert(0, direct_pathogen_chunk)
+        elif not pathogen_info:
+            exact_chunk_idx = -1
+            for idx, ch in enumerate(retrieved_chunks):
+                if PersistentVectorStore._is_exact_pathogen_match(query, ch.get("text", "")):
+                    exact_chunk_idx = idx
+                    break
+            if exact_chunk_idx > 0:
+                exact_chunk = retrieved_chunks.pop(exact_chunk_idx)
+                retrieved_chunks.insert(0, exact_chunk)
 
-            # Clean overlap noise from top pathogen chunk and parse authoritative attributes
-            if retrieved_chunks:
-                cleaned_top_text = extract_pathogen_section(retrieved_chunks[0]["text"], query)
-                pathogen_info = parse_pathogen_chunk_attributes(cleaned_top_text)
-                if pathogen_info:
-                    retrieved_chunks[0]["text"] = cleaned_top_text
+        # Clean overlap noise from top pathogen chunk and parse authoritative attributes if not yet set
+        if not pathogen_info and retrieved_chunks:
+            cleaned_top_text = extract_pathogen_section(retrieved_chunks[0]["text"], query)
+            pathogen_info = parse_pathogen_chunk_attributes(cleaned_top_text)
+            if pathogen_info:
+                retrieved_chunks[0]["text"] = cleaned_top_text
 
         # Step 3: Analyze pathogen classification to identify applicable laws
         full_text_corpus = " ".join([c.get("text", "") for c in retrieved_chunks]) + " " + search_query
@@ -544,7 +663,7 @@ class ConversationalRAGEngine:
             yield {
                 "type": "status",
                 "stage": "law_search",
-                "message": "법제처(law.go.kr)에서 최신 법령 조문 및 8대 의무 항목 검색 중..."
+                "message": "법제처(law.go.kr)에서 최신 법령 조문 및 10대 의무 항목 검색 중..."
             }
             law_data = self.law_search_client.search_applicable_laws_for_pathogen(
                 pathogen_name=canonical_pathogen_name,
@@ -572,13 +691,13 @@ class ConversationalRAGEngine:
             yield {
                 "type": "status",
                 "stage": "procedure_search",
-                "message": "8대 신고·허가 세부 실무 절차 가이드라인 검색 및 결합 중..."
+                "message": "10대 신고·허가 세부 실무 절차 가이드라인 검색 및 결합 중..."
             }
             procedure_chunks = []
             try:
                 procedure_chunks = self.vector_store.search(
                     "제조신고 보유신고 수입허가 인수신고 인도신고 양도신고 폐기신고 절차 서류",
-                    top_k=3
+                    top_k=4
                 )
             except Exception as e:
                 logger.warning(f"Procedure chunks search warning: {e}")
@@ -658,12 +777,15 @@ class ConversationalRAGEngine:
                 f"{non_app_laws_str}\n\n"
                 f"★ 절대 주의 규칙:\n"
                 f"1. 위의 [1단계] 표나 내용을 절대로 다시 출력하거나 요약·반복하지 마십시오! (중복 출력 엄격히 금지)\n"
-                f"2. 당신의 답변은 반드시 바로 '### [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]' 제목으로 시작해야 합니다.\n"
+                f"2. 당신의 답변은 반드시 바로 '### [2단계: 법제처(국가법령정보센터) 검색 기반 법률별 10대 항목 및 실무 가이드 절차]' 제목으로 시작해야 합니다.\n"
                 f"   - 대제목 바로 다음 줄에는 아래 안내사항을 그대로 1번만 표기하세요:\n"
                 f"     :red[**안내사항 : 아래 법적 사항 및 실무 절차는 참고만 하시기 바라며, 실무 절차 관련 문의는 정책지원실 담당자(T.8334)에게 연락해 주시기 바랍니다.**]\n"
                 f"3. 위의 '적용 법률 목록'에 기재된 모든 법률에 대해 하나도 누락하지 말고, 각각 독립된 하위 섹션(### [법률명])을 나누어 작성하세요.\n"
                 f"4. 각 법률마다 반드시 다음 3가지 카테고리를 순서대로 구성하여 작성하세요:\n"
-                f"   1. 8대 항목 규제 내용 (1. 분리신고 ~ 8. 인도신고 순서대로 정리. 규정 없을 시 '해당없음'과 사유 명시)\n"
+                f"   1. 10대 필수 항목별 규제 요건 (• [**분리신고**], • [**이동(분양)신고**], • [**보유신고**], • [**폐기신고**], • [**제조신고**], • [**개발실험승인**], • [**수입(반입)신고**], • [**인수신고**], • [**수출신고**], • [**인도신고**] - 10대 항목 전체를 하나도 빠짐없이 모두 작성할 것. '• [**인도신고**]' 누락 절대 금지)\n"
+                f"      - ★ [법조문 번호 및 불릿·대괄호 볼드(• [**항목명**]:) 작성 필수 - 모든 법률 공통]:\n"
+                f"        * 컨텍스트 데이터에 기재된 법률/시행령/시행규칙/고시 조문 번호(예: 법 제25조, 시행규칙 제15조, 통합고시 제9-8조 등)를 절대 생략하지 말고 반드시 원문 그대로 포함하십시오.\n"
+                f"        * 숫자는 제외하고 반드시 '• [**항목명**]: ' 형태로 대괄호와 볼드체를 적용하여 각 항목마다 반드시 줄바꿈하여 각각 독립된 줄로 작성하십시오.\n"
                 f"   2. 실무 가이드 절차\n"
                 f"      - 소관 부처, 신청/신고 포털명 및 URL, 단계별 절차 Step 1~3, 구비서류\n"
                 f"      - ★ 중요: '2. 실무 가이드 절차' 제목 바로 아래에는 안내사항 문구를 절대 작성하지 마십시오. (안내사항 문구는 [2단계: ...] 대제목 아래에만 1회 표기됨)\n"
@@ -675,14 +797,15 @@ class ConversationalRAGEngine:
             prompt_instruction = (
                 "■ [답변 지침: 최고 권위의 '법률전문가', '법학대학 교수', '변호사'로서의 전문 법률 자문]\n"
                 "1. 당신의 역할: 대한민국 최고 권위의 '법률전문가이자 법학대학 교수, 전문 변호사'입니다.\n"
-                "2. 특정 병원체 8대 항목 템플릿 사용 엄격 금지:\n"
-                "   - '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 8대 항목 및 실무 가이드 절차]' 대제목이나 8대 필수 항목별 기계적 나열 템플릿을 절대로 적용하지 마십시오.\n"
+                "2. 특정 병원체 10대 항목 템플릿 사용 엄격 금지:\n"
+                "   - '[2단계: 법제처(국가법령정보센터) 검색 기반 법률별 10대 항목 및 실무 가이드 절차]' 대제목이나 10대 필수 항목별 기계적 나열 템플릿을 절대로 적용하지 마십시오.\n"
                 "3. 법제처(law.go.kr) 공식 조문 원문 최우선 인용 및 환각 엄금:\n"
                 "   - 아래 컨텍스트에 제공된 [법제처(국가법령정보센터) 최신 법령 정보 및 공식 조문 원문 데이터]를 철저히 확인하고, 조문 번호(제○조 제○항 제○호), 법정 형량(사형, 무기징역, 징역 연수), 벌금 액수 등을 왜곡이나 추측 없이 100% 원문 그대로 인용하여 해설하십시오.\n"
                 "   - 사용자가 질문에서 이전 진술이나 특정 조문 내용의 진위 여부/비교 검토를 요구한 경우, 법제처 공식 조문 원문과 1:1로 대조하여 정확한 사실관계를 명백하게 분석 및 판정하세요.\n"
-                "4. 자율적 마크다운 형식의 논리적이고 구체적인 답변:\n"
-                "   - 질문의 핵심 쟁점에 가장 적합하도록 마크다운 형식으로 자율적이고 논리적인 목차를 구성하여 심도 있게 답변하세요.\n"
-                "   - (권장 목차 구성 예시: ## 1. 법적 개요 및 핵심 쟁점 ➔ ## 2. 관련 법령 체계 및 핵심 법조문 ➔ ## 3. 상세 요건 및 인허가·신고 실무 절차 ➔ ## 4. 위반 시 법적 제재 및 책임(벌칙/과태료) ➔ ## 5. 법률전문가(변호사) 실무 자문 및 유의사항)\n"
+                "4. 형식적 고정 틀 배제 및 자유롭고 명쾌한 맞춤형 서술:\n"
+                "   - '1. 법적 개요 및 핵심 쟁점', '2. 관련 법령 체계', '3. 상세 요건', '4. 위반 시 제재', '5. 변호사 자문' 같은 5단계 고정 템플릿을 절대로 기계적으로 적용하지 마십시오.\n"
+                "   - 동일 내용의 무의미한 중복과 형식적 서론을 배제하고, 질문자의 질의 쟁점에 즉시 직접적으로 답변하십시오.\n"
+                "   - 쟁점별 체계적인 소제목(마크다운), 불릿 포인트, 위반 항목별 처벌 비교 표(Table) 등을 자유롭게 활용하여 구체적 조문과 실무적 해설이 누락·생략되지 않도록 풍부하고 명쾌하게 서술하십시오.\n"
                 "5. 품격 있는 전문 법률가 어조 유지: 신뢰성 있고 명쾌한 법리적 어조로 작성하십시오."
             )
 
@@ -721,9 +844,16 @@ class ConversationalRAGEngine:
             citation_lines = ["\n\n---\n**📚 참고 법령 및 공식 출처**"]
             for law in law_data.get("applicable_laws", []):
                 citation_lines.append(f"- 법제처: [{law['full_name']} ({law['effective_date']} 시행)]({law['url']})")
-            for i, ch in enumerate(retrieved_chunks[:3], 1):
-                src = ch["metadata"].get("source", "Unknown")
-                page = ch["metadata"].get("page", ch["metadata"].get("page_start", 1))
+            unique_sources = []
+            seen_src = set()
+            for ch in (retrieved_chunks + procedure_chunks):
+                s_name = ch["metadata"].get("source", "Unknown")
+                p_num = ch["metadata"].get("page", ch["metadata"].get("page_start", 1))
+                s_key = f"{s_name}_{p_num}"
+                if s_key not in seen_src:
+                    seen_src.add(s_key)
+                    unique_sources.append((s_name, p_num))
+            for i, (src, page) in enumerate(unique_sources[:5], 1):
                 citation_lines.append(f"- 내부 규제 DB {i}: {src} (p.{page})")
             return "\n".join(citation_lines)
 

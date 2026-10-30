@@ -9,7 +9,7 @@ def test_system_prompt_selection():
     # When query is a pathogen
     prompt_pathogen = get_system_prompt(is_pathogen_query=True)
     assert prompt_pathogen == PATHOGEN_SYSTEM_PROMPT
-    assert "8대 필수 항목별 규제 요건" in prompt_pathogen
+    assert "10대 필수 항목별 규제 요건" in prompt_pathogen
 
     # When query is a general legal / procedural question
     prompt_legal = get_system_prompt(is_pathogen_query=False)
@@ -17,7 +17,7 @@ def test_system_prompt_selection():
     assert "법률전문가" in prompt_legal
     assert "법학대학 교수" in prompt_legal
     assert "변호사" in prompt_legal
-    assert "특정 병원체 8대 항목 템플릿 사용 절대 금지" in prompt_legal
+    assert "특정 병원체 10대 항목 템플릿 사용 절대 금지" in prompt_legal
 
 
 def test_general_law_search_and_format():
@@ -31,7 +31,7 @@ def test_general_law_search_and_format():
     assert "법제처(국가법령정보센터)" in formatted
     assert "주요 법정 규정 및 조문별 요건" in formatted
     # 8-item fixed category heading must NOT be forced
-    assert "8대 필수 항목별 규제 요건:" not in formatted
+    assert "10대 필수 항목별 규제 요건:" not in formatted
 
 
 def test_pathogen_vs_general_query_classification():

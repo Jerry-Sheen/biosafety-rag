@@ -1108,7 +1108,7 @@ def run_streamlit_app():
             response_placeholder.markdown(full_response)
 
             if not has_error and retrieved_sources:
-                with st.expander("🔍 참고 문서 청크", expanded=False):
+                with st.expander("🔍 참고 출처 및 컨텍스트", expanded=False):
                     for idx, src in enumerate(retrieved_sources):
                         st.markdown(f"**[{idx+1}] {src['metadata'].get('source', '문서')}** (유사도: `{src.get('similarity',0.0):.2f}`)")
                         st.text(src['text'][:400] + "...")
